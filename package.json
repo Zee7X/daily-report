@@ -1,20 +1,19 @@
 {
   "name": "daily-report-antigravity",
-  "version": "1.0.0",
-  "description": "Antigravity skill untuk laporan harian kerja otomatis dari riwayat session dan git diff lokal.",
+  "version": "1.1.0",
+  "description": "Antigravity skill suite for automated daily work reporting, code review, and standup summaries.",
   "bin": {
-    "daily-report-antigravity": "./cli/install.js"
+    "daily-report-antigravity": "index.js"
   },
   "files": [
+    "index.js",
     "plugin.json",
-    "cli",
     "skills"
   ],
   "keywords": [
     "antigravity",
     "skill",
-    "daily-report",
-    "laporan-harian"
+    "daily-report"
   ],
   "author": "Zee7X",
   "license": "MIT",
