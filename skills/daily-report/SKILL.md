@@ -52,21 +52,29 @@ npx tsc --noEmit
 
 Record "Clean (0 errors)" or list relevant error counts. Do not fix any type errors.
 
-### 4. Visual Verification (Smart Capture & Multimodal Analysis)
+### 4. Visual Verification (Multi-Screenshot & Clickable Links)
 
-1. **Capture Screenshot**:
-   Execute the bundled screenshot script:
+1. **Check Existing Screenshots**:
+   Inspect directory `reports/screenshots/` for any existing images captured today (`screenshot.png`, `screenshot-1.png`, `light.png`, `dark.png`, etc.).
+
+2. **Capture from Clipboard or Port**:
+   Run the bundled screenshot utility:
    ```bash
    node ~/.gemini/config/skills/daily-report/scripts/screenshot.js
    ```
-   - If the user snipped an authenticated screen (`Win + Shift + S`), the script automatically retrieves it from the Windows Clipboard and saves it to `reports/screenshots/screenshot.png`.
-   - If a specific port was given (e.g. `/daily-report 8001`), run with `--port <port>`.
+   - Automatically saves clipboard images without overwriting previous captures.
+   - If a specific port was provided, run with `--port <port>`.
 
-2. **Multimodal Analysis & Verification**:
-   - Inspect the saved image file using `view_file` to review its visual content (page title, URL, components, text).
-   - Cross-reference the image content with the files modified in `git status` / `git diff`.
-   - If the screenshot matches a modified feature, place it under the matching section with a descriptive, verified caption.
-   - If the screenshot does not match the project (e.g. external media or unrelated app), notify the user in the report note.
+3. **Multimodal Analysis & Clickable Link Formatting**:
+   - Inspect each saved image using `view_file` to review its visual content (page title, URL, components).
+   - Cross-reference with `git status` / `git diff`.
+   - In Antigravity Chat UI, raw `file:///` `<img>` tags are blocked by Electron security policies. Therefore, **always provide a clickable Markdown link** alongside the image tag so the user can open and view the image in Antigravity with a single click:
+     ```markdown
+     ### [Identified Feature / Page Name]
+     - [Buka Gambar: [Feature Name]](file:///[absolute_path_to_image])
+     ![[Feature Name]](reports/screenshots/[filename].png)
+     > [Descriptive verification note matching git changes and visible UI elements]
+     ```
 
 ---
 
@@ -127,9 +135,15 @@ Working Hours: 08:00 - 17:00
 
 ## Visual Verification
 
-### [Identified Feature / Module Name]
-![[Feature Name]](reports/screenshots/screenshot.png)
-> [Descriptive verification note matching git changes and visible UI elements]
+### [Feature 1 Name]
+- [Buka Gambar](file:///[absolute_path_to_image_1])
+![Feature 1](reports/screenshots/[image_1].png)
+> [Verification details for Feature 1]
+
+### [Feature 2 Name]
+- [Buka Gambar](file:///[absolute_path_to_image_2])
+![Feature 2](reports/screenshots/[image_2].png)
+> [Verification details for Feature 2]
 
 ---
 

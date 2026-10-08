@@ -16,7 +16,8 @@ function parseArgs() {
     output: 'reports/screenshots',
     wait: 3500,
     width: 1280,
-    height: 800
+    height: 800,
+    overwrite: false
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -27,6 +28,8 @@ function parseArgs() {
       options.mode = 'browser'
     } else if (arg === '--name' || arg === '-n') {
       options.name = args[++i]
+    } else if (arg === '--overwrite') {
+      options.overwrite = true
     } else if (arg === '--port' || arg === '-p') {
       options.port = parseInt(args[++i], 10)
       options.mode = 'browser'
@@ -46,6 +49,27 @@ function parseArgs() {
   }
 
   return options
+}
+
+function resolveTargetPath(outputDir, requestedName, overwrite) {
+  if (requestedName) {
+    const explicit = join(outputDir, `${requestedName}.png`)
+    if (overwrite || !existsSync(explicit)) return explicit
+    let count = 1
+    while (existsSync(join(outputDir, `${requestedName}-${count}.png`))) {
+      count++
+    }
+    return join(outputDir, `${requestedName}-${count}.png`)
+  }
+
+  const defaultPath = join(outputDir, 'screenshot.png')
+  if (overwrite || !existsSync(defaultPath)) return defaultPath
+
+  let counter = 1
+  while (existsSync(join(outputDir, `screenshot-${counter}.png`))) {
+    counter++
+  }
+  return join(outputDir, `screenshot-${counter}.png`)
 }
 
 function captureClipboard(destPath) {
@@ -126,8 +150,7 @@ async function main() {
   const outputDir = resolve(process.cwd(), opts.output)
   mkdirSync(outputDir, { recursive: true })
 
-  const baseFileName = opts.name || 'screenshot'
-  const targetImage = join(outputDir, `${baseFileName}.png`)
+  const targetImage = resolveTargetPath(outputDir, opts.name, opts.overwrite)
 
   // Mode 1: Explicit Clipboard Capture
   if (opts.mode === 'clipboard') {
@@ -152,7 +175,7 @@ async function main() {
     // No image in clipboard, proceed to headless browser capture
   }
 
-  // Mode 3: Headless Browser Capture (for public dev ports)
+  // Mode 3: Headless Browser Capture
   const browserBin = resolveBrowserBinary()
   let targetUrl = opts.url
 
