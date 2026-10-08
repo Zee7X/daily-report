@@ -1,74 +1,86 @@
 # daily-report
 
-Antigravity skill suite — daily work reports, code review, and standup summaries. No commit or push required.
+Antigravity skill suite for automated daily engineering reports, code reviews, and standup summaries. Extracts context directly from active session history and local Git diffs without requiring commits or pushes.
 
-## Install
+## Installation
+
+Run via npx:
 
 ```bash
 npx daily-report-antigravity
 ```
 
-Copies all three skills to your Antigravity skills directory automatically.
+Or install globally:
 
-| OS | Target |
-|----|--------|
-| Windows | `%APPDATA%\Antigravity\skills\` |
-| macOS / Linux | `~/.antigravity/skills/` |
-
-## Skills
-
-| Command | What it does |
-|---------|-------------|
-| `/daily-report` | Full daily report (08:00–17:00): session history + git diff + type-check status |
-| `/daily-report-review` | Per-file code review of today's local changes with actionable feedback |
-| `/daily-report-summary` | 3–5 sentence TL;DR for standup, Slack, or email |
-
-### `/daily-report-summary` variants
-
-```
-/daily-report-summary slack     → casual, max 280 chars
-/daily-report-summary standup   → Done / Doing / Blockers
-/daily-report-summary email     → formal with salutation
+```bash
+npm install -g daily-report-antigravity
+daily-report-antigravity
 ```
 
-## Example output
+The installer detects your environment and provisions the skills into the appropriate Antigravity configuration paths:
 
-```markdown
-# 📋 Daily Report — Thursday, October 8, 2026
-**Working Hours:** 08:00 – 17:00
+| Platform | Destination Path |
+| --- | --- |
+| Primary (Antigravity Global) | `~/.gemini/config/skills/` |
+| Windows (IDE) | `%APPDATA%\Antigravity\skills\` |
+| macOS / Linux Fallback | `~/.antigravity/skills/` |
 
-## ✅ Features / Logic Worked On
-- Implemented optimistic update for createOrder mutation
-- Fixed skeleton loading state on dashboard
-- Refactored form persistence using localStorage
+After running the installer, reload or restart Antigravity to refresh the available skills.
 
-## 📁 Local File Changes (Git)
-M  src/components/OrderForm.tsx
-M  src/hooks/useOrder.ts
-A  src/components/ui/Skeleton.tsx
+## Skills Reference
 
-## 🔍 Type-Check Status
-Clean (0 errors)
-```
+### 1. `/daily-report`
 
-## Package structure
+Generates a complete daily work report for standard working hours (08:00 - 17:00). Analyzes session prompt history, uncommitted local changes (`git status`, `git diff`), and TypeScript verification status.
+
+Output includes:
+- Features and logic implemented
+- UI state improvements (skeleton loaders, toast feedback, optimistic mutations, form persistence)
+- Local Git modifications and diff breakdown
+- Type checking results (`tsc --noEmit`)
+- Placeholders for visual artifacts (light and dark mode screenshots)
+
+### 2. `/daily-report-review`
+
+Performs an automated peer review of all code modified during the day. Inspects uncommitted changes and local commits for:
+- Correctness and edge-case handling
+- Naming conventions and domain consistency
+- Side effects and potential state leaks
+- TypeScript soundness
+- Performance risks and premature abstractions
+- Basic security hygiene
+
+### 3. `/daily-report-summary`
+
+Produces a compact 3 to 5 sentence overview intended for standups and team channels.
+
+Supported arguments:
+- `/daily-report-summary slack`: Single-paragraph message under 280 characters.
+- `/daily-report-summary standup`: Formatted into Done, In Progress, and Blockers.
+- `/daily-report-summary email`: Formal summary including salutations.
+
+## Directory Structure
 
 ```
 daily-report/
-├── index.js                       ← installer (npx entry point)
+├── index.js
 ├── plugin.json
 ├── package.json
-└── skills/
-    ├── daily-report/SKILL.md
-    ├── daily-report-review/SKILL.md
-    └── daily-report-summary/SKILL.md
+├── skills/
+│   ├── daily-report/
+│   │   └── SKILL.md
+│   ├── daily-report-review/
+│   │   └── SKILL.md
+│   └── daily-report-summary/
+│       └── SKILL.md
+└── README.md
 ```
 
-## Requirements
+## System Requirements
 
-- Node.js ≥ 18
-- Antigravity (latest)
-- Git (optional)
+- Node.js 18 or newer
+- Antigravity
+- Git (optional, required for local change inspection)
 
 ## License
 
