@@ -36,6 +36,17 @@ for (const base of targetDirs) {
 
       mkdirSync(dest, { recursive: true })
       copyFileSync(src, join(dest, 'SKILL.md'))
+
+      // Copy screenshot utility into daily-report
+      if (skill === 'daily-report') {
+        const scriptSrc = join(__dir, 'scripts', 'screenshot.js')
+        const scriptDestDir = join(dest, 'scripts')
+        if (existsSync(scriptSrc)) {
+          mkdirSync(scriptDestDir, { recursive: true })
+          copyFileSync(scriptSrc, join(scriptDestDir, 'screenshot.js'))
+        }
+      }
+
       console.log(`Installed: ${skill} -> ${dest}`)
     }
   } catch (err) {
@@ -46,6 +57,6 @@ for (const base of targetDirs) {
 console.log('')
 console.log('Installation completed.')
 console.log('Restart or reload Antigravity, then use:')
-console.log('  /daily-report')
+console.log('  /daily-report [port]')
 console.log('  /daily-report-review')
 console.log('  /daily-report-summary')

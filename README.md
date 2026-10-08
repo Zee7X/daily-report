@@ -4,7 +4,7 @@
 
 # Daily Report
 
-Automated daily engineering reports, code reviews, and standup summaries for Antigravity. Extracts context directly from active session history and local Git diffs without requiring daily commits or pushes.
+Automated daily engineering reports, code reviews, standup summaries, and automated localhost screenshot capture for Antigravity. Extracts context directly from active session history and local Git diffs without requiring daily commits or pushes.
 
 ## Installation
 
@@ -33,16 +33,21 @@ After running the installer, reload or restart Antigravity (`Ctrl + R`) to load 
 
 ## Commands
 
-### 1. `/daily-report`
+### 1. `/daily-report [port]`
 
-Generates a complete daily work report for standard working hours (08:00 - 17:00). Aggregates active session history, uncommitted local changes (`git status`, `git diff`), and TypeScript status.
+Generates a complete daily work report for standard working hours (08:00 - 17:00). Aggregates active session history, uncommitted local changes (`git status`, `git diff`), TypeScript status, and captures live localhost screenshots.
+
+Usage:
+- `/daily-report` (auto-detects open dev server port on localhost)
+- `/daily-report 8001` (specifies port 8001 explicitly)
+- `/daily-report --port 3000` (specifies port 3000)
 
 Sections:
 - Features and logic implemented
 - UI state improvements (skeleton loaders, toast feedback, optimistic mutations, form persistence)
 - Local Git modifications and diff breakdown
 - Type checking results (`tsc --noEmit`)
-- Placeholders for visual artifacts (light and dark mode screenshots)
+- Automated visual verification: captures both Light Mode (`reports/screenshots/light.png`) and Dark Mode (`reports/screenshots/dark.png`)
 
 ### 2. `/daily-report-review`
 
@@ -61,6 +66,23 @@ Strictly read-only: identifies defects and suggestions by file and line number w
 Produces a concise 3 to 5 sentence summary of today's work, formatted for daily standup meetings and team chat channels (Slack, Teams, Discord).
 
 Strictly read-only: outputs plain text without modifying code or workspace files.
+
+## Standalone Screenshot CLI
+
+You can also run the screenshot capture utility directly from your terminal:
+
+```bash
+daily-report-screenshot --port 8001
+# or
+npx daily-report-screenshot --port 8001
+```
+
+Options:
+- `--port, -p <number>`: Port number to capture (e.g. 8001, 3000, 5173).
+- `--url, -u <string>`: Full URL (e.g. `http://localhost:8001/dashboard`).
+- `--path <string>`: Route path to append (defaults to `/`).
+- `--output, -o <dir>`: Directory to save screenshots (defaults to `reports/screenshots`).
+- `--wait, -w <ms>`: Wait time in ms for single-page app JS to render (defaults to 3500ms).
 
 ## Multi-Session Support
 

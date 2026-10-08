@@ -1,19 +1,20 @@
 ---
 name: daily-report
-description: Compile an automated daily work report (08:00–17:00) from today's Antigravity session history and local uncommitted changes via git, without requiring daily commits or pushes. Strictly read-only.
+description: Compile an automated daily work report (08:00–17:00) with local git diff, session history, and automated localhost screenshot capture with port selection. Strictly read-only on project code.
 ---
 
 # Daily Report Skill
 
-Triggers on `/daily-report`.
+Triggers on `/daily-report [port]`.
 
-## Strict Rule: Read-Only Operation
+## Strict Rule: Read-Only Operation on Project Code
 
 This skill is **STRICTLY READ-ONLY**:
-- **DO NOT edit, modify, create, or delete any source files.**
-- **DO NOT invoke `replace_file_content`, `write_to_file`, or any file mutation tools.**
+- **DO NOT edit, modify, or refactor any source files in the project.**
+- **DO NOT invoke `replace_file_content` on workspace code.**
 - Only run non-destructive inspection commands (`git status`, `git diff`, `tsc --noEmit`).
-- Your sole output is the markdown report printed into the chat.
+- The only file written is screenshot artifacts into `reports/screenshots/` if screenshot automation is triggered.
+- Your primary output is the markdown report printed into the chat.
 
 ## Execution Steps
 
@@ -50,6 +51,31 @@ npx tsc --noEmit
 ```
 
 Record "Clean (0 errors)" or list relevant error counts. Do not fix any type errors.
+
+### 4. Automated Screenshot Capture (Port Selection)
+
+If the user specifies a port (e.g. `/daily-report 8001`, `/daily-report --port 8001`, or mentions a port), or if a dev server is running on localhost:
+
+Run the bundled screenshot utility:
+```bash
+node ~/.gemini/config/skills/daily-report/scripts/screenshot.js --port <port>
+```
+
+- When multiple ports are active on localhost, use the port requested by the user, or pass `--port <chosen_port>`.
+- The utility generates:
+  - `reports/screenshots/light.png`
+  - `reports/screenshots/dark.png`
+- Embed the generated images in the output report:
+  ```markdown
+  ## Visual Verification
+
+  ### Light Mode
+  ![Light Mode](reports/screenshots/light.png)
+
+  ### Dark Mode
+  ![Dark Mode](reports/screenshots/dark.png)
+  ```
+- If no dev server is running, fallback to: `> [Dev server not active or port unavailable]`.
 
 ---
 
@@ -111,10 +137,10 @@ Working Hours: 08:00 - 17:00
 ## Visual Verification
 
 ### Light Mode
-> [Attach screenshot here]
+![Light Mode](reports/screenshots/light.png)
 
 ### Dark Mode
-> [Attach screenshot here]
+![Dark Mode](reports/screenshots/dark.png)
 
 ---
 
