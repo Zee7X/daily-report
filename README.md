@@ -1,58 +1,37 @@
 # daily-report
 
-> Antigravity skill suite — automated daily work reports, peer code review, and standup summaries.
-> No commit, no push, one command.
+Antigravity skill suite — daily work reports, code review, and standup summaries. No commit or push required.
 
----
-
-## ⚡ Install (1 line)
-
-```bash
-npx github:Zee7X/daily-report-antigravity
-```
-
-Or once published to npm:
+## Install
 
 ```bash
 npx daily-report-antigravity
 ```
 
-The installer auto-detects your OS and copies all skills to the correct Antigravity directory:
+Copies all three skills to your Antigravity skills directory automatically.
 
 | OS | Target |
 |----|--------|
 | Windows | `%APPDATA%\Antigravity\skills\` |
 | macOS / Linux | `~/.antigravity/skills/` |
 
----
+## Skills
 
-## 🚀 Skills
+| Command | What it does |
+|---------|-------------|
+| `/daily-report` | Full daily report (08:00–17:00): session history + git diff + type-check status |
+| `/daily-report-review` | Per-file code review of today's local changes with actionable feedback |
+| `/daily-report-summary` | 3–5 sentence TL;DR for standup, Slack, or email |
 
-### `/daily-report`
-
-Full daily work report (08:00–17:00). Extracts session history + git diff and generates
-a structured Markdown report with sections for features, UI state changes, file changes, and type-check status.
-
-### `/daily-report-review`
-
-Deep peer-review of today's local code changes. Runs `git diff`, analyzes each changed
-file for correctness, naming, type safety, performance, and security — outputs structured
-per-file feedback with actionable suggestions.
-
-### `/daily-report-summary`
-
-Ultra-compact TL;DR (3–5 sentences) ready to paste into Slack, Teams, or a standup.
-Supports variants:
+### `/daily-report-summary` variants
 
 ```
-/daily-report-summary slack      → casual, emoji OK, max 280 chars
-/daily-report-summary standup    → Done / Doing / Blockers format
-/daily-report-summary email      → formal, with salutation
+/daily-report-summary slack     → casual, max 280 chars
+/daily-report-summary standup   → Done / Doing / Blockers
+/daily-report-summary email     → formal with salutation
 ```
 
----
-
-## 📋 Example Output (`/daily-report`)
+## Example output
 
 ```markdown
 # 📋 Daily Report — Thursday, October 8, 2026
@@ -72,35 +51,24 @@ A  src/components/ui/Skeleton.tsx
 Clean (0 errors)
 ```
 
----
-
-## 📁 Package Structure
+## Package structure
 
 ```
 daily-report/
+├── index.js                       ← installer (npx entry point)
 ├── plugin.json
 ├── package.json
-├── cli/
-│   └── install.js
-├── skills/
-│   ├── daily-report/
-│   │   └── SKILL.md           ← /daily-report
-│   ├── daily-report-review/
-│   │   └── SKILL.md           ← /daily-report-review
-│   └── daily-report-summary/
-│       └── SKILL.md           ← /daily-report-summary
-└── README.md
+└── skills/
+    ├── daily-report/SKILL.md
+    ├── daily-report-review/SKILL.md
+    └── daily-report-summary/SKILL.md
 ```
 
----
-
-## 🛠 Requirements
+## Requirements
 
 - Node.js ≥ 18
 - Antigravity (latest)
-- Git (optional, for file change detection)
-
----
+- Git (optional)
 
 ## License
 
