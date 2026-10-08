@@ -1,0 +1,20 @@
+{
+  "name": "daily-report",
+  "version": "1.0.0",
+  "description": "Antigravity skill suite for automated daily work reporting, code review, and standup summaries.",
+  "entry": "skills/",
+  "skills": [
+    {
+      "name": "daily-report",
+      "path": "skills/daily-report/SKILL.md"
+    },
+    {
+      "name": "daily-report-review",
+      "path": "skills/daily-report-review/SKILL.md"
+    },
+    {
+      "name": "daily-report-summary",
+      "path": "skills/daily-report-summary/SKILL.md"
+    }
+  ]
+}
