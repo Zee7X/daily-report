@@ -2,7 +2,9 @@
   "name": "daily-report-antigravity",
   "version": "1.0.0",
   "description": "Antigravity skill untuk laporan harian kerja otomatis dari riwayat session dan git diff lokal.",
-  "bin": "./cli/install.js",
+  "bin": {
+    "daily-report-antigravity": "./cli/install.js"
+  },
   "files": [
     "plugin.json",
     "cli",
