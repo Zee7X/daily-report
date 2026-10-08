@@ -1,15 +1,23 @@
 ---
 name: daily-report-review
-description: Perform peer code review of today's local code changes. Analyzes git diff for correctness, naming, type safety, performance, and security.
+description: Perform peer code review of today's local code changes. Analyzes git diff for correctness, naming, type safety, performance, and security. Strictly read-only.
 ---
 
 # Daily Report Review Skill
 
 Triggers on `/daily-report-review`.
 
+## Strict Rule: Read-Only Operation
+
+This skill is **STRICTLY READ-ONLY**:
+- **DO NOT edit, modify, create, or delete any source files.**
+- **DO NOT invoke `replace_file_content`, `write_to_file`, or any file mutation tools.**
+- Even if you detect syntax errors, TypeScript type errors, bugs, or code smell, **DO NOT fix them**. Only document them in the output report.
+- The sole objective of this skill is to inspect the diff and render a markdown code review report in the conversation.
+
 ## Execution Steps
 
-### 1. Collect Diff
+### 1. Collect Diff (Read-Only)
 
 ```bash
 git diff
@@ -30,7 +38,7 @@ Evaluate each modified file across the following dimensions:
 - Performance: Are there unnecessary allocations, expensive recalculations, or redundant renders?
 - Architecture: Does the change respect existing conventions without speculative layers?
 
-### 3. Type Checking
+### 3. Type Checking (Read-Only)
 
 ```bash
 npx tsc --noEmit
@@ -102,7 +110,8 @@ Check for exposed secrets, unsafe string interpolation in queries/markup, missin
 
 ## Guidelines
 
+- **STRICTLY PROHIBITED**: Editing, rewriting, or modifying any workspace files.
 - Reference exact lines and symbols rather than generic advice.
-- Every identified issue must be accompanied by an actionable fix.
+- Every identified issue must be accompanied by an actionable fix suggestion in the text, not by modifying the file.
 - If no changes are detected, write: "No local changes detected today."
 - Avoid decorative icons and emotional commentary.

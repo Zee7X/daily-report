@@ -1,11 +1,19 @@
 ---
 name: daily-report
-description: Compile an automated daily work report (08:00–17:00) from today's Antigravity session history and local uncommitted changes via git, without requiring daily commits or pushes.
+description: Compile an automated daily work report (08:00–17:00) from today's Antigravity session history and local uncommitted changes via git, without requiring daily commits or pushes. Strictly read-only.
 ---
 
 # Daily Report Skill
 
 Triggers on `/daily-report`.
+
+## Strict Rule: Read-Only Operation
+
+This skill is **STRICTLY READ-ONLY**:
+- **DO NOT edit, modify, create, or delete any source files.**
+- **DO NOT invoke `replace_file_content`, `write_to_file`, or any file mutation tools.**
+- Only run non-destructive inspection commands (`git status`, `git diff`, `tsc --noEmit`).
+- Your sole output is the markdown report printed into the chat.
 
 ## Execution Steps
 
@@ -18,7 +26,7 @@ Identify:
 - Issues or bugs resolved
 - Architectural or design decisions made
 
-### 2. Inspect Local Git Changes
+### 2. Inspect Local Git Changes (Read-Only)
 
 Execute the following commands in the workspace root:
 
@@ -34,13 +42,13 @@ git log --since="today 08:00" --oneline
 
 If git is not initialized or unavailable, record as "N/A".
 
-### 3. Run Type Check (Optional)
+### 3. Run Type Check (Read-Only)
 
 ```bash
 npx tsc --noEmit
 ```
 
-Record "Clean (0 errors)" or list relevant error counts.
+Record "Clean (0 errors)" or list relevant error counts. Do not fix any type errors.
 
 ---
 
@@ -116,6 +124,7 @@ Working Hours: 08:00 - 17:00
 
 ## Guidelines
 
+- **NEVER edit or touch any codebase files.**
 - If no file changes are detected, write: "No local file changes detected today."
 - If session history is unavailable, write: "No session history available."
 - Display dates using standard format (e.g. Thursday, October 8, 2026).
