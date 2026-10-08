@@ -17,14 +17,15 @@ This skill is **STRICTLY READ-ONLY**:
 
 ## Execution Steps
 
-### 1. Extract Today's Session History (08:00–17:00)
+### 1. Extract Today's Session History and Multi-Session Context (08:00–17:00)
 
-Scan the active Antigravity session for all prompts and responses today.
-Identify:
-- Features or logic implemented
-- Components and modules modified
-- Issues or bugs resolved
-- Architectural or design decisions made
+- Active Session: Scan the current conversation for prompts, features, and decisions made today.
+- Multi-Session Awareness: If multiple chat sessions were used today on this workspace, synthesize work across threads by checking conversation logs in `~/.gemini/antigravity/brain/` modified today, or correlate directly with the repository-wide Git changes.
+- Identify:
+  - Features or logic implemented across all tasks today
+  - Components and modules modified
+  - Issues or bugs resolved
+  - Architectural or design decisions made
 
 ### 2. Inspect Local Git Changes (Read-Only)
 

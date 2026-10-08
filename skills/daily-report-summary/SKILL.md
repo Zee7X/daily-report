@@ -18,14 +18,7 @@ This skill is **STRICTLY READ-ONLY**:
 
 ### 1. Collect Context (Read-Only)
 
-Scan session context and run:
-
-```bash
-git status --short
-git log --since="today 08:00" --oneline
-```
-
-Identify core completed features, bug fixes, and active blockers.
+Scan active conversation context and combine with repository-wide Git state (`git status`, `git log`). If multiple chat sessions were used today on this workspace, synthesize the overall outcome across threads. Identify core completed features, bug fixes, and active blockers.
 
 ### 2. Format Output
 
