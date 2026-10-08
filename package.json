@@ -1,6 +1,6 @@
 {
   "name": "daily-report-antigravity",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Antigravity skill suite for automated daily work reporting, code review, and standup summaries.",
   "bin": {
     "daily-report-antigravity": "index.js"
