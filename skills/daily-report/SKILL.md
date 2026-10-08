@@ -68,8 +68,11 @@ Record "Clean (0 errors)" or list relevant error counts. Do not fix any type err
 
 3. **Multimodal Analysis & Rendering Instructions**:
    - Inspect each image using `view_file` to analyze its visual content (page title, route, UI elements).
-   - In Antigravity's chat window (Electron), raw `![alt](file:///...)` images are blocked by Electron web security policies. Therefore, **YOU MUST ALWAYS provide a direct clickable markdown file link** formatted as `[Lihat Screenshot: Feature Name](file:///absolute/path/to/image.png)`. When clicked, Antigravity immediately opens the image in its built-in viewer tab.
-   - Also include the standard relative image markdown `![caption](reports/screenshots/filename.png)` so it renders when viewed on GitHub, VS Code, or documentation sites.
+   - In Antigravity's chat window (Electron), raw `![alt](file:///...)` and `![alt](path)` image tags are blocked by Electron WebSecurity policies, which causes Antigravity to render an unsightly "Preview unavailable" box.
+   - **DO NOT output `![caption](...)` image tags.**
+   - **ALWAYS provide a direct clickable markdown file link** formatted as:
+     `- **Buka Screenshot**: [Lihat Screenshot: Feature Name](file:///absolute/path/to/image.png)`
+     When clicked, Antigravity immediately opens the image in its built-in image viewer tab.
 
 ---
 
@@ -133,13 +136,11 @@ Working Hours: 08:00 - 17:00
 [For EVERY image found in reports/screenshots/, generate an entry below:]
 
 ### [Feature / Page Name 1]
-- **Buka Gambar**: [Lihat Screenshot: Feature 1](file:///[absolute_path_to_image_1])
-![Feature 1](reports/screenshots/[image_1].png)
+- **Buka Screenshot**: [Lihat Screenshot: Feature 1](file:///[absolute_path_to_image_1])
 > **Verification Details**: [Page URL, components visible, match with git changes]
 
 ### [Feature / Page Name 2]
-- **Buka Gambar**: [Lihat Screenshot: Feature 2](file:///[absolute_path_to_image_2])
-![Feature 2](reports/screenshots/[image_2].png)
+- **Buka Screenshot**: [Lihat Screenshot: Feature 2](file:///[absolute_path_to_image_2])
 > **Verification Details**: [Page URL, components visible, match with git changes]
 
 ---
