@@ -1,6 +1,6 @@
 ---
 name: daily-report
-description: Compile an automated daily work report (08:00–17:00) with local git diff, session history, and multimodal visual verification (clipboard/headless). Strictly read-only on project code.
+description: Compile an automated daily work report (08:00–17:00) with local git diff, session history, and multimodal visual verification for all screenshots in reports/screenshots/. Strictly read-only on project code.
 ---
 
 # Daily Report Skill
@@ -52,12 +52,9 @@ npx tsc --noEmit
 
 Record "Clean (0 errors)" or list relevant error counts. Do not fix any type errors.
 
-### 4. Visual Verification (Multi-Screenshot & Clickable Links)
+### 4. Visual Verification (All Screenshots & Clickable Links)
 
-1. **Check Existing Screenshots**:
-   Inspect directory `reports/screenshots/` for any existing images captured today (`screenshot.png`, `screenshot-1.png`, `light.png`, `dark.png`, etc.).
-
-2. **Capture from Clipboard or Port**:
+1. **Capture Clipboard / Port**:
    Run the bundled screenshot utility:
    ```bash
    node ~/.gemini/config/skills/daily-report/scripts/screenshot.js
@@ -65,16 +62,14 @@ Record "Clean (0 errors)" or list relevant error counts. Do not fix any type err
    - Automatically saves clipboard images without overwriting previous captures.
    - If a specific port was provided, run with `--port <port>`.
 
-3. **Multimodal Analysis & Clickable Link Formatting**:
-   - Inspect each saved image using `view_file` to review its visual content (page title, URL, components).
-   - Cross-reference with `git status` / `git diff`.
-   - In Antigravity Chat UI, raw `file:///` `<img>` tags are blocked by Electron security policies. Therefore, **always provide a clickable Markdown link** alongside the image tag so the user can open and view the image in Antigravity with a single click:
-     ```markdown
-     ### [Identified Feature / Page Name]
-     - [Buka Gambar: [Feature Name]](file:///[absolute_path_to_image])
-     ![[Feature Name]](reports/screenshots/[filename].png)
-     > [Descriptive verification note matching git changes and visible UI elements]
-     ```
+2. **Scan ALL Existing Screenshots in Workspace**:
+   List all image files in `reports/screenshots/` (e.g. `screenshot.png`, `dark.png`, `light.png`, `screenshot-1.png`, etc.).
+   Do NOT only show one image if multiple screenshots exist!
+
+3. **Multimodal Analysis & Rendering Instructions**:
+   - Inspect each image using `view_file` to analyze its visual content (page title, route, UI elements).
+   - In Antigravity's chat window (Electron), raw `![alt](file:///...)` images are blocked by Electron web security policies. Therefore, **YOU MUST ALWAYS provide a direct clickable markdown file link** formatted as `[Lihat Screenshot: Feature Name](file:///absolute/path/to/image.png)`. When clicked, Antigravity immediately opens the image in its built-in viewer tab.
+   - Also include the standard relative image markdown `![caption](reports/screenshots/filename.png)` so it renders when viewed on GitHub, VS Code, or documentation sites.
 
 ---
 
@@ -135,15 +130,17 @@ Working Hours: 08:00 - 17:00
 
 ## Visual Verification
 
-### [Feature 1 Name]
-- [Buka Gambar](file:///[absolute_path_to_image_1])
-![Feature 1](reports/screenshots/[image_1].png)
-> [Verification details for Feature 1]
+[For EVERY image found in reports/screenshots/, generate an entry below:]
 
-### [Feature 2 Name]
-- [Buka Gambar](file:///[absolute_path_to_image_2])
+### [Feature / Page Name 1]
+- **Buka Gambar**: [Lihat Screenshot: Feature 1](file:///[absolute_path_to_image_1])
+![Feature 1](reports/screenshots/[image_1].png)
+> **Verification Details**: [Page URL, components visible, match with git changes]
+
+### [Feature / Page Name 2]
+- **Buka Gambar**: [Lihat Screenshot: Feature 2](file:///[absolute_path_to_image_2])
 ![Feature 2](reports/screenshots/[image_2].png)
-> [Verification details for Feature 2]
+> **Verification Details**: [Page URL, components visible, match with git changes]
 
 ---
 
