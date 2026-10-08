@@ -4,7 +4,7 @@
 
 # Daily Report
 
-Automated daily engineering reports, code reviews, standup summaries, and automated localhost screenshot capture for Antigravity. Extracts context directly from active session history and local Git diffs without requiring daily commits or pushes.
+Automated daily engineering reports, code reviews, standup summaries, and multimodal visual verification for Antigravity. Extracts context directly from active session history and local Git diffs without requiring daily commits or pushes.
 
 ## Installation
 
@@ -35,19 +35,20 @@ After running the installer, reload or restart Antigravity (`Ctrl + R`) to load 
 
 ### 1. `/daily-report [port]`
 
-Generates a complete daily work report for standard working hours (08:00 - 17:00). Aggregates active session history, uncommitted local changes (`git status`, `git diff`), TypeScript status, and captures live localhost screenshots.
+Generates a complete daily work report for standard working hours (08:00 - 17:00). Aggregates active session history, uncommitted local changes (`git status`, `git diff`), TypeScript verification, and visual evidence.
 
 Usage:
-- `/daily-report` (auto-detects open dev server port on localhost)
-- `/daily-report 8001` (specifies port 8001 explicitly)
-- `/daily-report --port 3000` (specifies port 3000)
+- `/daily-report`: Auto-detects clipboard screenshots (bypassing login/captcha) or open localhost dev ports.
+- `/daily-report 8001`: Explicitly targets port 8001 for headless browser capture.
 
 Sections:
 - Features and logic implemented
 - UI state improvements (skeleton loaders, toast feedback, optimistic mutations, form persistence)
 - Local Git modifications and diff breakdown
 - Type checking results (`tsc --noEmit`)
-- Automated visual verification: captures both Light Mode (`reports/screenshots/light.png`) and Dark Mode (`reports/screenshots/dark.png`)
+- Visual Verification:
+  - If a screen was snipped via `Win + Shift + S`, the utility automatically pulls it from the Windows Clipboard and saves it to `reports/screenshots/screenshot.png`.
+  - The AI agent inspects the image using multimodal vision, cross-references visible UI elements (titles, components, routes) with the day's Git diff, and embeds it under the matching feature with an accurate caption.
 
 ### 2. `/daily-report-review`
 
@@ -72,17 +73,18 @@ Strictly read-only: outputs plain text without modifying code or workspace files
 You can also run the screenshot capture utility directly from your terminal:
 
 ```bash
+# Capture directly from Windows Clipboard (Win+Shift+S)
+daily-report-screenshot --clipboard
+
+# Capture from local dev port
 daily-report-screenshot --port 8001
-# or
-npx daily-report-screenshot --port 8001
 ```
 
 Options:
-- `--port, -p <number>`: Port number to capture (e.g. 8001, 3000, 5173).
-- `--url, -u <string>`: Full URL (e.g. `http://localhost:8001/dashboard`).
-- `--path <string>`: Route path to append (defaults to `/`).
+- `--clipboard, -c`: Read and save image from the clipboard.
+- `--port, -p <number>`: Port number to capture via headless browser (e.g. 8001, 3000).
+- `--name, -n <string>`: Custom filename output (defaults to `screenshot`).
 - `--output, -o <dir>`: Directory to save screenshots (defaults to `reports/screenshots`).
-- `--wait, -w <ms>`: Wait time in ms for single-page app JS to render (defaults to 3500ms).
 
 ## Multi-Session Support
 

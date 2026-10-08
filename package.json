@@ -1,7 +1,7 @@
 {
   "name": "daily-report-antigravity",
-  "version": "1.2.0",
-  "description": "Antigravity skill suite for automated daily work reporting, code review, standup summaries, and automated localhost screenshot capture.",
+  "version": "1.3.0",
+  "description": "Antigravity skill suite for automated daily work reporting, code review, standup summaries, and multimodal visual verification.",
   "bin": {
     "daily-report-antigravity": "index.js",
     "daily-report-screenshot": "scripts/screenshot.js"
@@ -17,7 +17,8 @@
     "antigravity",
     "skill",
     "daily-report",
-    "screenshot"
+    "screenshot",
+    "multimodal"
   ],
   "author": "Zee7X",
   "license": "MIT",

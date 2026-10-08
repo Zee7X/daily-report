@@ -1,6 +1,6 @@
 ---
 name: daily-report
-description: Compile an automated daily work report (08:00–17:00) with local git diff, session history, and automated localhost screenshot capture with port selection. Strictly read-only on project code.
+description: Compile an automated daily work report (08:00–17:00) with local git diff, session history, and multimodal visual verification (clipboard/headless). Strictly read-only on project code.
 ---
 
 # Daily Report Skill
@@ -13,7 +13,7 @@ This skill is **STRICTLY READ-ONLY**:
 - **DO NOT edit, modify, or refactor any source files in the project.**
 - **DO NOT invoke `replace_file_content` on workspace code.**
 - Only run non-destructive inspection commands (`git status`, `git diff`, `tsc --noEmit`).
-- The only file written is screenshot artifacts into `reports/screenshots/` if screenshot automation is triggered.
+- The only files written are screenshot artifacts into `reports/screenshots/` if screenshot capture is executed.
 - Your primary output is the markdown report printed into the chat.
 
 ## Execution Steps
@@ -52,30 +52,21 @@ npx tsc --noEmit
 
 Record "Clean (0 errors)" or list relevant error counts. Do not fix any type errors.
 
-### 4. Automated Screenshot Capture (Port Selection)
+### 4. Visual Verification (Smart Capture & Multimodal Analysis)
 
-If the user specifies a port (e.g. `/daily-report 8001`, `/daily-report --port 8001`, or mentions a port), or if a dev server is running on localhost:
+1. **Capture Screenshot**:
+   Execute the bundled screenshot script:
+   ```bash
+   node ~/.gemini/config/skills/daily-report/scripts/screenshot.js
+   ```
+   - If the user snipped an authenticated screen (`Win + Shift + S`), the script automatically retrieves it from the Windows Clipboard and saves it to `reports/screenshots/screenshot.png`.
+   - If a specific port was given (e.g. `/daily-report 8001`), run with `--port <port>`.
 
-Run the bundled screenshot utility:
-```bash
-node ~/.gemini/config/skills/daily-report/scripts/screenshot.js --port <port>
-```
-
-- When multiple ports are active on localhost, use the port requested by the user, or pass `--port <chosen_port>`.
-- The utility generates:
-  - `reports/screenshots/light.png`
-  - `reports/screenshots/dark.png`
-- Embed the generated images in the output report:
-  ```markdown
-  ## Visual Verification
-
-  ### Light Mode
-  ![Light Mode](reports/screenshots/light.png)
-
-  ### Dark Mode
-  ![Dark Mode](reports/screenshots/dark.png)
-  ```
-- If no dev server is running, fallback to: `> [Dev server not active or port unavailable]`.
+2. **Multimodal Analysis & Verification**:
+   - Inspect the saved image file using `view_file` to review its visual content (page title, URL, components, text).
+   - Cross-reference the image content with the files modified in `git status` / `git diff`.
+   - If the screenshot matches a modified feature, place it under the matching section with a descriptive, verified caption.
+   - If the screenshot does not match the project (e.g. external media or unrelated app), notify the user in the report note.
 
 ---
 
@@ -136,11 +127,9 @@ Working Hours: 08:00 - 17:00
 
 ## Visual Verification
 
-### Light Mode
-![Light Mode](reports/screenshots/light.png)
-
-### Dark Mode
-![Dark Mode](reports/screenshots/dark.png)
+### [Identified Feature / Module Name]
+![[Feature Name]](reports/screenshots/screenshot.png)
+> [Descriptive verification note matching git changes and visible UI elements]
 
 ---
 

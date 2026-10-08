@@ -8,6 +8,8 @@ import net from 'net'
 function parseArgs() {
   const args = process.argv.slice(2)
   const options = {
+    mode: 'auto', // 'auto', 'clipboard', 'browser'
+    name: null,
     port: null,
     url: null,
     path: '/',
@@ -19,10 +21,18 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
-    if (arg === '--port' || arg === '-p') {
+    if (arg === '--clipboard' || arg === '-c') {
+      options.mode = 'clipboard'
+    } else if (arg === '--browser' || arg === '-b') {
+      options.mode = 'browser'
+    } else if (arg === '--name' || arg === '-n') {
+      options.name = args[++i]
+    } else if (arg === '--port' || arg === '-p') {
       options.port = parseInt(args[++i], 10)
+      options.mode = 'browser'
     } else if (arg === '--url' || arg === '-u') {
       options.url = args[++i]
+      options.mode = 'browser'
     } else if (arg === '--path') {
       options.path = args[++i]
     } else if (arg === '--output' || arg === '-o') {
@@ -31,10 +41,31 @@ function parseArgs() {
       options.wait = parseInt(args[++i], 10)
     } else if (/^\d{2,5}$/.test(arg)) {
       options.port = parseInt(arg, 10)
+      options.mode = 'browser'
     }
   }
 
   return options
+}
+
+function captureClipboard(destPath) {
+  if (process.platform === 'win32') {
+    const psScript = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$img = [System.Windows.Forms.Clipboard]::GetImage()
+if ($img) {
+    $img.Save('${destPath.replace(/\\/g, '\\\\')}', [System.Drawing.Imaging.ImageFormat]::Png)
+    $img.Dispose()
+    exit 0
+} else {
+    exit 1
+}
+`
+    const res = spawnSync('powershell', ['-NoProfile', '-Command', psScript])
+    return res.status === 0 && existsSync(destPath)
+  }
+  return false
 }
 
 async function checkPort(port) {
@@ -92,8 +123,37 @@ function resolveBrowserBinary() {
 
 async function main() {
   const opts = parseArgs()
-  const browserBin = resolveBrowserBinary()
+  const outputDir = resolve(process.cwd(), opts.output)
+  mkdirSync(outputDir, { recursive: true })
 
+  const baseFileName = opts.name || 'screenshot'
+  const targetImage = join(outputDir, `${baseFileName}.png`)
+
+  // Mode 1: Explicit Clipboard Capture
+  if (opts.mode === 'clipboard') {
+    console.log('Checking Windows clipboard for captured image...')
+    const ok = captureClipboard(targetImage)
+    if (ok) {
+      console.log(`Saved Clipboard Screenshot: ${targetImage}`)
+      process.exit(0)
+    } else {
+      console.error('No image found in clipboard. Press Win+Shift+S first.')
+      process.exit(1)
+    }
+  }
+
+  // Mode 2: Auto Mode (Checks clipboard first, then falls back to dev server port)
+  if (opts.mode === 'auto') {
+    const ok = captureClipboard(targetImage)
+    if (ok) {
+      console.log(`Saved Clipboard Screenshot: ${targetImage}`)
+      process.exit(0)
+    }
+    // No image in clipboard, proceed to headless browser capture
+  }
+
+  // Mode 3: Headless Browser Capture (for public dev ports)
+  const browserBin = resolveBrowserBinary()
   let targetUrl = opts.url
 
   if (!targetUrl) {
@@ -102,38 +162,34 @@ async function main() {
     } else {
       const activePorts = await findActivePort()
       if (activePorts.length === 0) {
-        console.error('Error: No active localhost dev servers detected. Pass --port <number> explicitly.')
+        console.error('No dev ports active and no clipboard image detected.')
         process.exit(1)
       }
 
       if (activePorts.length > 1) {
-        console.log(`Detected multiple active ports: ${activePorts.join(', ')}. Selected: ${activePorts[0]}`)
+        console.log(`Detected active ports: ${activePorts.join(', ')}. Selected: ${activePorts[0]}`)
       }
 
       targetUrl = `http://localhost:${activePorts[0]}${opts.path.startsWith('/') ? opts.path : '/' + opts.path}`
     }
   }
 
-  const outputDir = resolve(process.cwd(), opts.output)
-  mkdirSync(outputDir, { recursive: true })
-
   const lightPath = join(outputDir, 'light.png')
   const darkPath = join(outputDir, 'dark.png')
 
   console.log(`Target URL: ${targetUrl}`)
 
-  // 1. Light Mode Capture
-  const lightArgs = [
+  // Light Mode
+  spawnSync(browserBin, [
     '--headless',
     `--virtual-time-budget=${opts.wait}`,
     `--window-size=${opts.width},${opts.height}`,
     `--screenshot=${lightPath}`,
     targetUrl
-  ]
-  spawnSync(browserBin, lightArgs)
+  ])
 
-  // 2. Dark Mode Capture
-  const darkArgs = [
+  // Dark Mode
+  spawnSync(browserBin, [
     '--headless',
     '--force-dark-mode',
     '--blink-settings=forceDarkModeEnabled=true',
@@ -141,19 +197,18 @@ async function main() {
     `--window-size=${opts.width},${opts.height}`,
     `--screenshot=${darkPath}`,
     targetUrl
-  ]
-  spawnSync(browserBin, darkArgs)
+  ])
 
   if (existsSync(lightPath) && existsSync(darkPath)) {
     console.log(`Captured Light Mode: ${lightPath}`)
     console.log(`Captured Dark Mode:  ${darkPath}`)
   } else {
-    console.error('Failed to capture one or both screenshots.')
+    console.error('Failed to capture browser screenshots.')
     process.exit(1)
   }
 }
 
 main().catch(err => {
-  console.error(`Screenshot failed: ${err.message}`)
+  console.error(`Screenshot error: ${err.message}`)
   process.exit(1)
 })
