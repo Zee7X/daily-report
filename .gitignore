@@ -1,0 +1,23 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# local data
+storage/
+.env
+.env.local
+.env.*.local
+
+# python worker
+worker/.venv/
+__pycache__/
+*.pyc
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+npm-debug.log*

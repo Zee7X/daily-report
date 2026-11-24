@@ -1,29 +1,39 @@
 {
-  "name": "daily-report-antigravity",
-  "version": "1.3.3",
-  "description": "Antigravity skill suite for automated daily work reporting, code review, standup summaries, and multimodal visual verification.",
-  "bin": {
-    "daily-report-antigravity": "index.js",
-    "daily-report-screenshot": "scripts/screenshot.js"
-  },
-  "files": [
-    "assets",
-    "index.js",
-    "plugin.json",
-    "scripts",
-    "skills"
-  ],
-  "keywords": [
-    "antigravity",
-    "skill",
-    "daily-report",
-    "screenshot",
-    "multimodal"
-  ],
+  "name": "daily-report",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Report Tool: susun laporan progres dari kanban (Basecamp), pilih poin dan gambar, lalu posting dalam satu klik.",
   "author": "Zee7X",
   "license": "MIT",
+  "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
-  "type": "module"
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.mjs",
+    "gen:key": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
+    "worker": "python3 worker/main.py"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1176.0",
+    "@aws-sdk/s3-request-presigner": "^3.1176.0",
+    "@upstash/qstash": "^2.12.2",
+    "geist": "^1.9.2",
+    "mysql2": "^3.24.6",
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
 }
