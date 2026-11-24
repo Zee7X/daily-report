@@ -20,7 +20,6 @@ export async function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="brand" aria-label={t.brand}>
             <Image src="/logo.png" alt="" width={26} height={26} priority />
             <span>{t.brand}</span>
-            <small>{t.tagline}</small>
           </Link>
           {user && (
             <Nav

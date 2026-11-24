@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { afterLoginUrl, recordFailure, safeNext, tooManyAttempts, verifyPassword } from '@/lib/auth'
+import { handoffUrl, onAuthHost, recordFailure, safeNext, tooManyAttempts, verifyPassword } from '@/lib/auth'
+import { env } from '@/lib/env'
 import { api, HttpError } from '@/lib/http'
 import { getPasswordHash } from '@/lib/repo/users'
 import { createSession } from '@/lib/session'
@@ -9,9 +10,12 @@ const Input = z.object({
   email: z.string().trim().email().max(255),
   password: z.string().min(1).max(200),
   next: z.string().max(500).optional(),
+  n: z.string().max(100).optional(),
 })
 
-// POST /api/auth/login — login email + password (FR-1)
+// POST /api/auth/login — login email + password (FR-1).
+// Di AUTH_URL tidak ada sesi yang dibuat; hasilnya diserahkan ke APP_URL lewat token yang terikat
+// ke nonce browser (parameter n, berasal dari cookie yang dipasang APP_URL).
 export const POST = api(
   async (req) => {
     const input = Input.parse(await req.json())
@@ -24,12 +28,11 @@ export const POST = api(
       throw new HttpError(401, 'invalid_credentials', 'Email atau password salah')
     }
     const next = safeNext(input.next)
-    const handoff = await afterLoginUrl(found.user.id, next)
-    if (handoff) {
-      await createSession(found.user.id, { short: true })
-      return NextResponse.json({ redirect: handoff })
+    if (await onAuthHost()) {
+      if (!input.n) throw new HttpError(400, 'missing_nonce', 'Buka halaman login dari aplikasi lalu coba lagi.')
+      return NextResponse.json({ redirect: await handoffUrl(found.user.id, env.appUrl, next, input.n) })
     }
-    await createSession(found.user.id)
+    await createSession(found.user)
     return NextResponse.json({ redirect: next })
   },
   { auth: false },

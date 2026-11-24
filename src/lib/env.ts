@@ -50,8 +50,9 @@ export const env = {
       .filter(Boolean)
   },
   /** Mode satu pengguna hanya diizinkan di mode lokal. */
+  /** Mode satu pengguna (tanpa login) hanya untuk komputer sendiri; tidak pernah aktif di Vercel. */
   get singleUser() {
-    return this.appMode === 'local' && str('SINGLE_USER', 'true') === 'true'
+    return !onVercel && this.appMode === 'local' && str('SINGLE_USER', 'true') === 'true'
   },
   get databaseUrl() {
     return str('DATABASE_URL')

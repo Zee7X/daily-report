@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { api } from '@/lib/client'
 import { useI18n } from '@/lib/i18n/client'
 
-export function LoginForm({ next, restricted }: { next: string; restricted: boolean }) {
+export function LoginForm({ next, nonce, restricted }: { next: string; nonce: string; restricted: boolean }) {
   const { t } = useI18n()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [name, setName] = useState('')
@@ -20,7 +20,7 @@ export function LoginForm({ next, restricted }: { next: string; restricted: bool
     try {
       const r = await api<{ redirect: string }>(mode === 'login' ? '/api/auth/login' : '/api/auth/signup', {
         method: 'POST',
-        json: mode === 'login' ? { email, password, next } : { name, email, password, next },
+        json: mode === 'login' ? { email, password, next, n: nonce || undefined } : { name, email, password, next, n: nonce || undefined },
       })
       window.location.assign(r.redirect)
     } catch (err) {

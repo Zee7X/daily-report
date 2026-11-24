@@ -5,7 +5,6 @@ export const LOCALES: Locale[] = ['id', 'en']
 
 const id = {
   brand: 'Daily Report',
-  tagline: 'Report Tool',
   nav: { home: 'Beranda', new: 'Laporan baru', history: 'Riwayat', templates: 'Template', connect: 'Koneksi', logout: 'Keluar' },
   footer: {
     rights: 'Semua laporan tetap milikmu.',
@@ -132,7 +131,6 @@ const id = {
     submitLogin: 'Masuk',
     submitSignup: 'Buat akun',
     or: 'atau',
-    via: 'Login berlangsung di {auth}. Setelah berhasil, kamu otomatis kembali ke {app}.',
     signupNote: 'Pendaftaran dibatasi ke email yang diizinkan pemilik aplikasi.',
     errors: {
       handoff: 'Sesi login kedaluwarsa. Silakan masuk lagi.',
@@ -314,7 +312,6 @@ export type Dict = typeof id
 
 const en: Dict = {
   brand: 'Daily Report',
-  tagline: 'Report Tool',
   nav: { home: 'Home', new: 'New report', history: 'History', templates: 'Templates', connect: 'Connections', logout: 'Log out' },
   footer: {
     rights: 'Your reports stay yours.',
@@ -441,7 +438,6 @@ const en: Dict = {
     submitLogin: 'Sign in',
     submitSignup: 'Create account',
     or: 'or',
-    via: 'Sign-in happens on {auth}. Afterwards you are sent back to {app} automatically.',
     signupNote: 'Sign-up is limited to emails allowed by the app owner.',
     errors: {
       handoff: 'The sign-in session expired. Please sign in again.',

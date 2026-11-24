@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { Coord } from '@/components/ui'
-import { handoffUrl, onAuthHost, safeNext } from '@/lib/auth'
+import { onAuthHost, safeNext } from '@/lib/auth'
 import { listConnectors } from '@/lib/connectors'
 import { env } from '@/lib/env'
 import { fmt } from '@/lib/i18n/dict'
@@ -16,15 +16,17 @@ export const metadata = { title: 'Login' }
 export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams
   const next = safeNext(sp.next)
-  const user = await currentUser()
-  if (user) {
-    if (await onAuthHost()) redirect(await handoffUrl(user.id, env.appUrl, next))
+  const authHost = await onAuthHost()
+  if (authHost) {
+    // Domain login tidak menyimpan sesi. Tanpa nonce (dibuka langsung, bukan dari aplikasi),
+    // kembali dulu ke APP_URL/login agar browser ini mendapat cookie nonce.
+    if (!sp.n) redirect(`${env.appUrl}/login?next=${encodeURIComponent(next)}${sp.error ? `&error=${encodeURIComponent(sp.error)}` : ''}`)
+  } else if (await currentUser()) {
     redirect(next)
   }
   const { t } = await getDict()
   const providers = listConnectors().filter((c) => c.supportsLogin && c.isConfigured())
   const error = sp.error ? (t.login.errors[sp.error] ?? sp.error) : null
-  const host = (u: string) => new URL(u).host
 
   return (
     <div className="grid">
@@ -49,7 +51,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             {error}
           </p>
         )}
-        <LoginForm next={next} restricted={env.signupAllowed.length > 0} />
+        <LoginForm next={next} nonce={sp.n ?? ''} restricted={env.signupAllowed.length > 0} />
       </section>
 
       <section className="cell span-6">
@@ -58,16 +60,17 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         {providers.length ? (
           <div className="stack">
             {providers.map((c) => (
-              <a key={c.id} className="btn" href={`/api/connectors/${c.id}/authorize?intent=login`}>
+              <a
+                key={c.id}
+                className="btn"
+                href={`${env.appUrl}/api/connectors/${c.id}/authorize?intent=login&next=${encodeURIComponent(next)}`}
+              >
                 {fmt(t.login.button, { tool: c.label })} ↗
               </a>
             ))}
           </div>
         ) : (
           <p className="small">{t.login.notConfigured}</p>
-        )}
-        {env.splitAuth && (
-          <p className="small push">{fmt(t.login.via, { auth: host(env.authUrl), app: host(env.appUrl) })}</p>
         )}
       </section>
     </div>
