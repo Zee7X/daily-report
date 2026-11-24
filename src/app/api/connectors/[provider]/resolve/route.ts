@@ -8,7 +8,7 @@ export const GET = api<{ params: Promise<{ provider: string }> }>(async (req, { 
   const { provider } = await params
   const { connector, conn } = await requireConnection(user.id, provider)
   const url = req.nextUrl.searchParams.get('url') ?? ''
-  const id = connector.parseCardUrl(url)
+  const id = connector.parseCardUrl(url, conn)
   if (!id) throw new HttpError(400, 'invalid_url', 'URL kartu tidak dikenali')
   const card = await connector.getCard(conn, id)
   return NextResponse.json({

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { requireConnection } from '@/lib/connectors'
 import type { CardDetail } from '@/lib/connectors/types'
 import { api, HttpError } from '@/lib/http'
-import { aiEnabled } from '@/lib/ai'
+import { aiFor } from '@/lib/ai'
 import { limits } from '@/lib/limits'
 import { composeDraft } from '@/lib/report/draft'
 import { resolveTarget, WEBHOOK } from '@/lib/report/targets'
@@ -13,7 +13,7 @@ import { getTemplate } from '@/lib/repo/templates'
 // Penyusunan draf AI ditargetkan < 60 detik.
 export const maxDuration = 90
 
-const CardRef = z.object({ provider: z.string().min(1).max(32), cardId: z.string().min(1).max(128) })
+const CardRef = z.object({ provider: z.string().min(1).max(32), cardId: z.string().min(1).max(255) })
 
 const CreateInput = z.object({
   templateId: z.string().min(1),
@@ -53,8 +53,10 @@ export const POST = api(async (req, { user }) => {
       ? await resolveTarget(user, input.target)
       : await fetchCard(input.target).then((c) => ({ provider: input.target!.provider, cardId: c.id, cardUrl: c.url, cardTitle: c.title }))
 
-  const allowAi = aiEnabled() ? await limits.tryAi(user.id) : false
-  const draft = await composeDraft({ template, sources, notes: input.notes, locale: user.locale, allowAi })
+  // AI milik pengguna sendiri tidak dibatasi kuota; AI bawaan instalasi dibatasi per hari.
+  const ai = await aiFor(user.id)
+  const allowAi = ai ? (ai.own ? true : await limits.tryAi(user.id)) : false
+  const draft = await composeDraft({ template, sources, notes: input.notes, locale: user.locale, ai, allowAi })
 
   const id = await createReport({
     userId: user.id,

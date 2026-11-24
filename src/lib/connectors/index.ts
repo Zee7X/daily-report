@@ -2,11 +2,21 @@ import 'server-only'
 import { HttpError } from '../http'
 import { getConnection } from '../repo/connections'
 import { basecamp } from './basecamp'
+import { clickup } from './clickup'
+import { github } from './github'
+import { jira } from './jira'
+import { linear } from './linear'
+import { trello } from './trello'
 import type { Connector } from './types'
 
-// Registry connector. Tambahkan connector baru (Jira, Trello, ...) di sini.
+// Registry connector. Urutan ini dipakai di halaman Koneksi.
 const registry: Record<string, Connector> = {
   basecamp,
+  trello,
+  jira,
+  github,
+  linear,
+  clickup,
 }
 
 export function listConnectors(): Connector[] {

@@ -1,5 +1,5 @@
 import { Coord } from '@/components/ui'
-import { aiEnabled } from '@/lib/ai'
+import { aiFor } from '@/lib/ai'
 import { getDict } from '@/lib/i18n/server'
 import { targetOptions } from '@/lib/report/targets'
 import { listTemplates } from '@/lib/repo/templates'
@@ -11,7 +11,7 @@ export const metadata = { title: 'Laporan baru' }
 export default async function NewReportPage() {
   const user = await requireUser()
   const { t, locale } = await getDict()
-  const [templates, options] = await Promise.all([listTemplates(user.id), targetOptions(user)])
+  const [templates, options, ai] = await Promise.all([listTemplates(user.id), targetOptions(user), aiFor(user.id)])
   const today = new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'id-ID', { day: 'numeric', month: 'short' }).format(
     new Date(),
   )
@@ -28,7 +28,7 @@ export default async function NewReportPage() {
         templates={templates.map((tpl) => ({ id: tpl.id, name: tpl.name }))}
         providers={options.providers}
         destinations={options.destinations}
-        aiOn={aiEnabled()}
+        aiOn={Boolean(ai)}
         today={today}
       />
     </div>

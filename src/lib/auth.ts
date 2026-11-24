@@ -2,6 +2,7 @@ import 'server-only'
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import { headers } from 'next/headers'
+import { decrypt, encrypt } from './crypto'
 import { exec, one } from './db'
 import { env } from './env'
 import { LOCAL_EMAIL } from './repo/users'
@@ -120,20 +121,49 @@ export type OAuthState = {
   returnBase: string
   nextPath: string
   result: string | null
+  /** PKCE code_verifier (disimpan terenkripsi, tidak pernah dikirim ke browser). */
+  pkceVerifier: string | null
 }
 
-export async function createOAuthState(s: Omit<OAuthState, 'result'>): Promise<{ state: string; nonce: string }> {
+/** PKCE S256: verifier acak + challenge = base64url(sha256(verifier)). */
+export function pkcePair() {
+  const verifier = randomBytes(32).toString('base64url')
+  const challenge = createHash('sha256').update(verifier).digest('base64url')
+  return { verifier, challenge }
+}
+
+export async function createOAuthState(
+  s: Omit<OAuthState, 'result' | 'pkceVerifier'> & { pkceVerifier?: string | null },
+): Promise<{ state: string; nonce: string }> {
   const state = randomBytes(24).toString('base64url')
   const nonce = randomBytes(24).toString('base64url')
   await exec('DELETE FROM oauth_states WHERE expires_at < ?', [new Date(Date.now() - 3600_000)])
   await exec(
-    'INSERT INTO oauth_states (state_hash, provider, intent, user_id, nonce_hash, return_base, next_path, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [sha256(state), s.provider, s.intent, s.userId, sha256(nonce), s.returnBase, safeNext(s.nextPath), new Date(Date.now() + OAUTH_TTL_MS)],
+    'INSERT INTO oauth_states (state_hash, provider, intent, user_id, nonce_hash, return_base, next_path, pkce_verifier, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      sha256(state),
+      s.provider,
+      s.intent,
+      s.userId,
+      sha256(nonce),
+      s.returnBase,
+      safeNext(s.nextPath),
+      s.pkceVerifier ? encrypt(s.pkceVerifier) : null,
+      new Date(Date.now() + OAUTH_TTL_MS),
+    ],
   )
   return { state, nonce }
 }
 
-type StateRow = { provider: string; intent: string; user_id: string | null; return_base: string; next_path: string; result: string | null }
+type StateRow = {
+  provider: string
+  intent: string
+  user_id: string | null
+  return_base: string
+  next_path: string
+  result: string | null
+  pkce_verifier: string | null
+}
 const mapState = (r: StateRow): OAuthState => ({
   provider: r.provider,
   intent: r.intent === 'login' ? 'login' : 'connect',
@@ -141,6 +171,7 @@ const mapState = (r: StateRow): OAuthState => ({
   returnBase: r.return_base,
   nextPath: r.next_path,
   result: r.result,
+  pkceVerifier: r.pkce_verifier ? decrypt(r.pkce_verifier) : null,
 })
 
 /** Callback: tandai state terpakai (sekali), kembalikan isinya. */
@@ -173,8 +204,8 @@ export async function completeOAuthState(state: string, nonce: string, key: stri
   if (res.affectedRows !== 1) return null
   const r = await one<StateRow>('SELECT * FROM oauth_states WHERE state_hash = ?', [hash])
   if (!r) return null
-  // Hasil (token terenkripsi) dihapus dari tabel setelah diambil.
-  await exec('UPDATE oauth_states SET result = NULL WHERE state_hash = ?', [hash])
+  // Hasil (token terenkripsi) dan verifier PKCE dihapus dari tabel setelah diambil.
+  await exec('UPDATE oauth_states SET result = NULL, pkce_verifier = NULL WHERE state_hash = ?', [hash])
   return mapState(r)
 }
 

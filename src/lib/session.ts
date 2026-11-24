@@ -1,6 +1,7 @@
 import 'server-only'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { cache } from 'react'
 import { env } from './env'
 import { sign, verify } from './crypto'
 import { bumpSessionVersion, ensureLocalUser, getUser, type User } from './repo/users'
@@ -43,14 +44,17 @@ async function parseSession(): Promise<{ id: string; version: number } | null> {
   return { id, version: Number(version) }
 }
 
-/** Pengguna saat ini. Di mode SINGLE_USER (hanya lokal), pengguna lokal dibuat otomatis. */
-export async function currentUser(): Promise<User | null> {
+/**
+ * Pengguna saat ini. Di mode SINGLE_USER (hanya lokal), pengguna lokal dibuat otomatis.
+ * Di-cache per request: layout dan halaman yang sama-sama memanggilnya hanya memicu satu query.
+ */
+export const currentUser = cache(async (): Promise<User | null> => {
   if (env.singleUser) return ensureLocalUser()
   const s = await parseSession()
   if (!s) return null
   const user = await getUser(s.id)
   return user && user.sessionVersion === s.version ? user : null
-}
+})
 
 /** Untuk halaman: arahkan ke /login bila belum masuk. */
 export async function requireUser(): Promise<User> {

@@ -11,6 +11,8 @@ const AUTH_PATHS = [
   /^\/login$/,
   /^\/api\/auth\/(login|signup)$/,
   /^\/api\/connectors\/[^/]+\/callback$/,
+  /^\/api\/integrations\/[^/]+\/callback$/,
+  /^\/oauth\/[^/]+$/,
   /^\/api\/locale$/,
   /^\/api\/health$/,
 ]
@@ -31,27 +33,45 @@ function pass(req: NextRequest) {
   return NextResponse.next({ request: { headers } })
 }
 
+/** Halaman aplikasi (bukan API, login, atau callback) yang butuh sesi. */
+const PUBLIC = [/^\/login$/, /^\/api\//, /^\/oauth\//, /^\/print\//]
+
+function singleUser() {
+  const mode = process.env.APP_MODE || (process.env.VERCEL ? 'cloud' : 'local')
+  return !process.env.VERCEL && mode === 'local' && (process.env.SINGLE_USER ?? 'true') === 'true'
+}
+
 export function proxy(req: NextRequest) {
   const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL
   const app = origin(process.env.APP_URL || (vercelProd ? `https://${vercelProd}` : undefined))
   const auth = origin(process.env.AUTH_URL)
-  if (!app || !auth || app.host === auth.host) return pass(req)
-
+  const split = Boolean(app && auth && app.host !== auth.host)
   const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? ''
   const { pathname, search } = req.nextUrl
 
-  if (host === auth.host && !AUTH_PATHS.some((re) => re.test(pathname))) {
-    return NextResponse.redirect(new URL(pathname + search, app), 307)
+  // Pengunjung tanpa cookie sesi langsung diarahkan ke /login, tanpa sempat melihat kerangka halaman.
+  // (Validitas cookie tetap diperiksa di server oleh halaman itu sendiri.)
+  const onApp = !split || host === app!.host
+  if (onApp && !singleUser() && !req.cookies.has('rt_session') && !PUBLIC.some((re) => re.test(pathname))) {
+    const login = new URL('/login', app && host === app.host ? app : req.nextUrl)
+    if (pathname !== '/') login.searchParams.set('next', pathname + search)
+    return NextResponse.redirect(login, 307)
   }
-  if (host === app.host && pathname === '/login') {
+
+  if (!split) return pass(req)
+
+  if (host === auth!.host && !AUTH_PATHS.some((re) => re.test(pathname))) {
+    return NextResponse.redirect(new URL(pathname + search, app!), 307)
+  }
+  if (host === app!.host && pathname === '/login') {
     const nonce = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
-    const target = new URL('/login', auth)
+    const target = new URL('/login', auth!)
     req.nextUrl.searchParams.forEach((v, k) => k !== 'n' && target.searchParams.set(k, v))
     target.searchParams.set('n', nonce)
     const res = NextResponse.redirect(target, 307)
     res.cookies.set('rt_hn', nonce, {
       httpOnly: true,
-      secure: app.protocol === 'https:',
+      secure: app!.protocol === 'https:',
       sameSite: 'lax',
       path: '/api/auth/handoff',
       maxAge: 600,

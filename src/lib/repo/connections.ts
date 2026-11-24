@@ -14,7 +14,7 @@ export type Connection = {
   accessToken: string
   refreshToken: string | null
   expiresAt: Date | null
-  meta: { accounts?: ConnectionAccount[]; email?: string }
+  meta: { accounts?: (ConnectionAccount & { url?: string })[]; email?: string; [k: string]: unknown }
 }
 
 type Row = {

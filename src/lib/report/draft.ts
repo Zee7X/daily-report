@@ -1,6 +1,6 @@
 import 'server-only'
 import { z } from 'zod'
-import { aiEnabled, completeJson, extractJson } from '../ai'
+import { completeJson, extractJson, type AiConfig } from '../ai'
 import type { CardDetail } from '../connectors/types'
 import { maskSecrets } from '../mask'
 import type { Template } from '../repo/templates'
@@ -13,7 +13,9 @@ export type DraftInput = {
   sources: CardDetail[]
   notes: string
   locale: 'id' | 'en'
-  /** false bila kuota AI harian pengguna habis. */
+  /** Konfigurasi AI yang dipakai (null = tanpa AI). */
+  ai: AiConfig | null
+  /** false bila kuota AI bawaan instalasi hari ini habis. */
   allowAi?: boolean
 }
 
@@ -152,13 +154,13 @@ export function fallbackDraft(input: DraftInput): ReportBody {
 
 export async function composeDraft(raw: DraftInput): Promise<DraftResult> {
   const input = { ...raw, sources: sanitizeSources(raw.sources) }
-  if (!aiEnabled()) return { body: fallbackDraft(input), usedAi: false, warning: null }
+  if (!input.ai) return { body: fallbackDraft(input), usedAi: false, warning: null }
   if (input.allowAi === false) {
     return { body: fallbackDraft(input), usedAi: false, warning: 'Kuota AI hari ini habis; draf disusun tanpa AI.' }
   }
   try {
     const { system, user } = buildPrompt(input)
-    const text = await completeJson(system, user)
+    const text = await completeJson(input.ai, system, user)
     const parsed = AiOutput.parse(extractJson(text))
     return { body: toBody(parsed, input.template), usedAi: true, warning: null }
   } catch (err) {

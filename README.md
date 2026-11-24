@@ -97,23 +97,38 @@ Claude tetap dipakai untuk testing dan merangkum hasilnya; Daily Report mengambi
 ## Fitur
 
 - **Sumber bahan**: kartu kanban (deskripsi, step, komentar) atau tulisan sendiri. Tanpa kanban, laporan tetap bisa dibuat penuh.
-- **Connect Basecamp** (OAuth Launchpad). Token dienkripsi AES-256-GCM dan diperbarui otomatis sebelum kedaluwarsa. Disconnect menghapus token.
-- **Pilih kartu** dengan menelusuri project → card table → kolom → kartu, atau menempel URL kartu. Kartu sumber dan tujuan boleh berbeda.
-- **Draf dari template**: AI (Anthropic/OpenAI, dipilih lewat `.env`) menyusun poin per bagian. Tanpa API key, draf disusun dari step kartu dan catatanmu.
+- **Kanban satu klik**: Basecamp, Trello, Jira, GitHub Issues, Linear, dan ClickUp. Token dienkripsi AES-256-GCM dan diperbarui otomatis. Disconnect menghapus token.
+- **Pilih kartu** dengan menelusuri board → kolom → kartu, atau menempel URL kartu. Kartu sumber dan tujuan boleh berbeda.
+- **AI satu klik**: "Connect OpenRouter" (Claude, GPT, Gemini, DeepSeek; biaya ke saldo pengguna sendiri), atau tempel API key Anthropic/OpenAI. Tanpa AI, draf disusun dari step kartu dan catatanmu.
 - **Penyamaran kredensial**: teks mirip password/token disamarkan sebelum masuk draf maupun prompt AI.
 - **Editor**: centang bagian/poin/gambar (yang tidak dicentang tidak ikut), edit teks, ubah urutan, tempel gambar ke poin. Tersimpan otomatis.
 - **Gambar**: upload PNG/JPG (maks. 10 MB) atau screenshot dari daftar URL (default 1440×900). Urutkan dengan drag; nomor "Gambar N" menyesuaikan otomatis.
 - **Tujuan posting**, dipilih per laporan:
-  - *Kartu kanban*: gambar diupload sebagai lampiran (`<bc-attachment>` di Basecamp), opsional centang subtask. Posting ulang menawarkan *Update komentar lama* atau *Posting baru*.
+  - *Kartu kanban*: komentar dengan gambar sebagai lampiran (lihat tabel connector), opsional centang subtask. Posting ulang menawarkan *Update komentar lama* atau *Posting baru*.
   - *Webhook*: lihat tabel di bawah.
   - *Salin saja*: tanpa posting.
 - **Format salin**: WhatsApp (`*tebal*`, bullet `•`), Slack (mrkdwn), Teams (rich text + teks biasa), HTML dengan gambar, Markdown, PDF, dan tampilan cetak.
 - **Riwayat** laporan dengan status dan tautan. Diff draf awal vs versi terkirim disimpan untuk analisis pola edit.
 - UI **Indonesia / English**, navigasi keyboard, kontras WCAG AA.
 
+### Connector kanban
+
+| Tool | Board → kolom → kartu | Gambar | Subtask yang bisa dicentang | Login |
+| --- | --- | --- | --- | --- |
+| Basecamp | project/card table → kolom → kartu | lampiran `<bc-attachment>` | step kartu | ya |
+| Trello | board → list → kartu | lampiran kartu | item checklist | – |
+| Jira Cloud | project → status → issue | lampiran issue (komentar ADF) | sub-task (transisi ke Done) | – |
+| GitHub Issues | repository → Open/Closed → issue | rujukan teks (API GitHub tidak bisa upload gambar) | task list `- [ ]` di issue | ya |
+| Linear | team → workflow state → issue | gambar tampil di komentar | sub-issue (pindah ke Completed) | – |
+| ClickUp | list → status → task | lampiran task | item checklist | – |
+
+Pengguna cukup klik **Connect**. Pemilik instalasi mendaftarkan aplikasi OAuth sekali per tool. Langkah, variabel environment, dan Redirect URI-nya tampil di halaman Koneksi (bagian *Cara mengaktifkan*) dan di `.env.example`.
+
 ### Webhook
 
-| Jenis | Cara mendapatkan URL | Gambar |
+**Discord** dan **Slack** bisa satu klik: pengguna memilih channel, lalu webhook dibuat otomatis (butuh `DISCORD_CLIENT_ID/SECRET` atau `SLACK_CLIENT_ID/SECRET`). Teams dan JSON tetap memakai URL webhook.
+
+| Jenis | Cara mendapatkan URL (manual) | Gambar |
 | --- | --- | --- |
 | Discord | Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL | ikut sebagai file (maks. 10 per pesan, 10 MB) |
 | Slack | api.slack.com/apps → Incoming Webhooks → Add New Webhook | ditulis sebagai rujukan `[Gambar N: …]` |
@@ -198,7 +213,9 @@ Untuk pengembangan, pakai `npm run dev` sebagai ganti `build && start`. Worker b
 | `BROWSER_DRIVER` | `local-worker`, `remote-worker`, atau `none` |
 | `BROWSER_WORKER_URL` / `BROWSER_WORKER_TOKEN` | alamat worker dan token (sama dengan `WORKER_TOKEN` di worker) |
 | `BASECAMP_*` | Client ID/Secret, Redirect URI, User-Agent (wajib berisi kontak) |
-| `AI_PROVIDER` / `AI_API_KEY` / `AI_MODEL` | `anthropic` (default model `claude-sonnet-5-5`), `openai` (`AI_MODEL` wajib), atau `none` |
+| `AI_PROVIDER` / `AI_API_KEY` / `AI_MODEL` | AI bawaan instalasi: `anthropic` (default `claude-sonnet-5-5`), `openai` (`AI_MODEL` wajib), `openrouter`, atau `none`. Pengguna yang menghubungkan AI sendiri tidak memakai ini. |
+| `TRELLO_API_KEY`, `GITHUB_*`, `JIRA_*`, `LINEAR_*`, `CLICKUP_*` | aktifkan connector kanban lain |
+| `DISCORD_CLIENT_*`, `SLACK_CLIENT_*` | aktifkan webhook satu klik |
 | `ENCRYPTION_KEY` | 32 byte base64 untuk enkripsi token dan tanda tangan sesi/URL |
 
 ## Online di Vercel + TiDB Cloud
@@ -244,7 +261,7 @@ TLS aktif otomatis untuk host `tidbcloud.com`.
 | `BASECAMP_USER_AGENT` | `Daily Report (email-kamu@example.com)` |
 | `AI_PROVIDER`, `AI_API_KEY` | opsional |
 
-Di Vercel, nilai default berikut sudah otomatis: `APP_MODE=cloud`, `STORAGE_DRIVER=vercel-blob`, `QUEUE_DRIVER=local` (job berjalan di fungsi yang sama lewat `after()`), `BROWSER_DRIVER=none`.
+Fungsi berjalan di region Singapura (`vercel.json`), dekat dengan TiDB `ap-southeast-1`, supaya perpindahan halaman cepat. Di Vercel, nilai default berikut sudah otomatis: `APP_MODE=cloud`, `STORAGE_DRIVER=vercel-blob`, `QUEUE_DRIVER=local` (job berjalan di fungsi yang sama lewat `after()`), `BROWSER_DRIVER=none`.
 
 ### 3. Deploy
 
@@ -340,7 +357,8 @@ Implementasikan antarmuka `Connector` di `src/lib/connectors/types.ts` (OAuth, `
 - Jenis file upload dicek dari isinya (magic bytes), bukan dari nama file.
 - Mode cloud menolak screenshot dan webhook ke localhost atau jaringan privat.
 - Request ke Basecamp dibatasi 40 per 10 detik per akun, dengan retry dan backoff untuk 429/5xx.
-- Bila AI diaktifkan, isi bahan laporan (setelah penyamaran) dikirim ke provider AI yang dipilih.
+- Bila AI diaktifkan, isi bahan laporan (setelah penyamaran) dikirim ke provider AI yang dipilih. API key AI pengguna disimpan terenkripsi dan tidak pernah dikirim ke browser (hanya 4 karakter terakhir).
+- Semua koneksi (kanban, Discord/Slack, OpenRouter) memakai alur yang sama: state di server, nonce di browser pemulai, dan kunci sekali pakai dari callback, jadi token tidak bisa diarahkan ke akun lain. OpenRouter memakai PKCE.
 
 ## Lisensi
 

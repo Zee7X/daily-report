@@ -12,7 +12,7 @@ export const maxDuration = 300
 
 const Input = z.object({
   mode: z.enum(['new', 'update']).optional(),
-  completeStepIds: z.array(z.string().max(128)).max(200).default([]),
+  completeStepIds: z.array(z.string().max(255)).max(200).default([]),
 })
 
 // POST /api/reports/:id/post — posting ke kartu tujuan (US-5, FR-10..12)
