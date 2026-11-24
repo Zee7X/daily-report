@@ -19,6 +19,45 @@ Satu repo Next.js, dua mode:
 
 Perbedaan mode hanya ada di `.env`.
 
+## Tampilan
+
+**Beranda**: status koneksi, laporan terakhir, template, dan pemeriksaan sistem.
+
+![Beranda](assets/screenshots/home.png)
+
+**Laporan baru**: pilih template, kartu sumber, dan kartu tujuan.
+
+![Laporan baru](assets/screenshots/new-report.png)
+
+**Editor draf**: centang bagian, poin, dan gambar, lalu ubah urutannya. Gambar ditempel ke poin dan dinomori otomatis.
+
+![Editor draf](assets/screenshots/editor.png)
+
+<details>
+<summary>Pratinjau, dialog posting, riwayat, template, mobile</summary>
+
+**Pratinjau**: isi komentar persis seperti yang akan diposting.
+
+![Pratinjau](assets/screenshots/preview.png)
+
+**Post ke Basecamp**: konfirmasi kartu tujuan dan centang subtask.
+
+![Dialog posting](assets/screenshots/post-dialog.png)
+
+**Riwayat**
+
+![Riwayat](assets/screenshots/history.png)
+
+**Template**
+
+![Template](assets/screenshots/templates.png)
+
+**Mobile**
+
+<img src="assets/screenshots/mobile.png" alt="Tampilan mobile" width="320" />
+
+</details>
+
 ## Fitur
 
 - **Connect Basecamp** (OAuth Launchpad). Token dienkripsi AES-256-GCM dan diperbarui otomatis sebelum kedaluwarsa. Disconnect menghapus token.
