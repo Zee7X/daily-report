@@ -106,7 +106,8 @@ export function CardPicker({ provider, onPick }: { provider: string; onPick: (c:
                   <option value="">{t.picker.choose}</option>
                   {columns.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.title} ({c.cardsCount})
+                      {c.title}
+                      {c.cardsCount >= 0 ? ` (${c.cardsCount})` : ''}
                     </option>
                   ))}
                 </select>

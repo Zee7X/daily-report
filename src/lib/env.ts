@@ -132,7 +132,7 @@ export const env = {
     },
   },
   get aiProvider() {
-    return oneOf('AI_PROVIDER', ['anthropic', 'openai', 'none'] as const, 'none')
+    return oneOf('AI_PROVIDER', ['anthropic', 'openai', 'openrouter', 'none'] as const, 'none')
   },
   get aiApiKey() {
     return str('AI_API_KEY')

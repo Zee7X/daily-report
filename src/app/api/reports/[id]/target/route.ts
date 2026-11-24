@@ -11,7 +11,7 @@ type Ctx = { params: Promise<{ id: string }> }
 export const PUT = api<Ctx>(async (req, { params, user }) => {
   const { id } = await params
   await requireReport(user, id)
-  const input = z.object({ provider: z.string().min(1).max(32), cardId: z.string().min(1).max(128) }).parse(await req.json())
+  const input = z.object({ provider: z.string().min(1).max(32), cardId: z.string().min(1).max(255) }).parse(await req.json())
   await setTarget(id, await resolveTarget(user, input))
   const target = await getTarget(id)
   return NextResponse.json({ target, targetInfo: await describeTarget(user, target) })

@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { Coord, formatDate, StatusTag } from '@/components/ui'
+import { aiFor } from '@/lib/ai'
 import { health } from '@/lib/health'
 import { fmt } from '@/lib/i18n/dict'
 import { getDict } from '@/lib/i18n/server'
@@ -12,11 +13,12 @@ import { requireUser } from '@/lib/session'
 export default async function Home() {
   const user = await requireUser()
   const { t, locale } = await getDict()
-  const [h, options, reports, templates] = await Promise.all([
+  const [h, options, reports, templates, ai] = await Promise.all([
     health(),
     targetOptions(user),
     listReports(user.id, 4),
     listTemplates(user.id),
+    aiFor(user.id),
   ])
   const connected = options.providers.filter((p) => p.connected)
   const connectable = options.providers.filter((p) => p.configured && !p.connected)
@@ -31,7 +33,7 @@ export default async function Home() {
       value: configuredConnectors.length ? configuredConnectors.map((x) => x.label).join(', ') : c.missing,
       tone: configuredConnectors.length ? 'ok' : 'dim',
     },
-    { label: c.ai, value: h.ai === 'on' ? h.aiProvider : c.fallback, tone: h.ai === 'on' ? 'ok' : 'dim' },
+    { label: c.ai, value: ai ? (ai.own ? `${ai.provider} · ${ai.model}` : ai.provider) : c.fallback, tone: ai ? 'ok' : 'dim' },
     {
       label: c.worker,
       value: h.worker === 'ok' ? c.ok : h.worker === 'off' ? c.off : c.unreachable,

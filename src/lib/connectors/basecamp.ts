@@ -205,6 +205,12 @@ export const basecamp: Connector = {
   id: 'basecamp',
   label: 'Basecamp',
   supportsLogin: true,
+  imagesAsFiles: true,
+  setup: {
+    url: 'https://launchpad.37signals.com/integrations',
+    env: ['BASECAMP_CLIENT_ID', 'BASECAMP_CLIENT_SECRET', 'BASECAMP_USER_AGENT'],
+    steps: ['Register another application', 'Isi Redirect URI di bawah', 'Salin Client ID & Secret ke environment'],
+  },
 
   isConfigured() {
     return Boolean(env.basecamp.clientId && env.basecamp.clientSecret)
@@ -238,7 +244,10 @@ export const basecamp: Connector = {
       expiresAt: t.expires_in ? new Date(Date.now() + t.expires_in * 1000) : info.expires_at ? new Date(info.expires_at) : null,
       meta: { accounts: bc.map((a) => ({ id: String(a.id), name: a.name })), email: info.identity.email_address },
     }
-    return { connection, identity: { email: info.identity.email_address, name: name || info.identity.email_address } }
+    return {
+      connection,
+      identity: { email: info.identity.email_address, name: name || info.identity.email_address, verified: true },
+    }
   },
 
   async listBoards(conn) {
@@ -314,6 +323,7 @@ export const basecamp: Connector = {
   },
 
   parseCardUrl(url: string) {
+    // conn tidak diperlukan: ID akun Basecamp ada di URL.
     let u: URL
     try {
       u = new URL(url.trim())

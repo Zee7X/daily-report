@@ -33,14 +33,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
     if (state.intent === 'connect') {
       const user = await currentUser()
       if (!user || user.id !== state.userId) return go('/connect?error=session_mismatch')
-      // Email akun = email Basecamp, dan pemegang sesi yang menghubungkannya: kepemilikan email terbukti.
-      if (identity.email.toLowerCase() === user.email) await markEmailVerified(user, { keepPassword: true })
+      // Email terverifikasi penyedia = email akun, dan pemegang sesi yang menghubungkannya: kepemilikan terbukti.
+      if (identity.verified && identity.email.toLowerCase() === user.email) await markEmailVerified(user, { keepPassword: true })
       await setUserName(user.id, identity.name)
       await saveConnection(user.id, provider, conn)
       return go(state.nextPath)
     }
 
-    // Login: email dari Basecamp sudah diverifikasi 37signals.
+    // Login hanya untuk penyedia yang menjamin email terverifikasi.
+    if (!identity.verified) return go('/login?error=email_not_verified')
     let user = await findUserByEmail(identity.email)
     if (!user) {
       if (!(await canSignup(identity.email))) return go('/login?error=signup_closed')

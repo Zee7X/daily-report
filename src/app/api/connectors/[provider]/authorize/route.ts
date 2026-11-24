@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createOAuthState, currentBase, OAUTH_NONCE_COOKIE, safeNext } from '@/lib/auth'
+import { createOAuthState, currentBase, OAUTH_NONCE_COOKIE, pkcePair, safeNext } from '@/lib/auth'
 import { getConnector } from '@/lib/connectors'
 import { env } from '@/lib/env'
 import { errorResponse, HttpError } from '@/lib/http'
@@ -14,18 +14,21 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
     const connector = getConnector(provider)
     if (!connector.isConfigured()) throw new HttpError(503, 'not_configured', `${connector.label} belum dikonfigurasi`)
     const intent = req.nextUrl.searchParams.get('intent') === 'login' ? 'login' : 'connect'
+    if (intent === 'login' && !connector.supportsLogin) throw new HttpError(400, 'login_not_supported')
     const base = await currentBase()
     const user = intent === 'connect' ? await currentUser() : null
     if (intent === 'connect' && !user) return NextResponse.redirect(new URL('/login?next=%2Fconnect', base))
 
+    const pkce = connector.usesPkce ? pkcePair() : null
     const { state, nonce } = await createOAuthState({
       provider,
       intent,
       userId: user?.id ?? null,
       returnBase: base,
-      nextPath: intent === 'connect' ? '/connect?connected=1' : safeNext(req.nextUrl.searchParams.get('next')),
+      nextPath: intent === 'connect' ? `/connect?connected=${provider}` : safeNext(req.nextUrl.searchParams.get('next')),
+      pkceVerifier: pkce?.verifier ?? null,
     })
-    const res = NextResponse.redirect(connector.authorizeUrl(state))
+    const res = NextResponse.redirect(connector.authorizeUrl(state, pkce ? { challenge: pkce.challenge } : undefined))
     res.cookies.set(OAUTH_NONCE_COOKIE, nonce, {
       httpOnly: true,
       secure: env.isCloud,
