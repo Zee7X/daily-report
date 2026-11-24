@@ -1,10 +1,10 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { Coord, formatDate, StatusTag } from '@/components/ui'
-import { getConnector } from '@/lib/connectors'
 import { health } from '@/lib/health'
+import { fmt } from '@/lib/i18n/dict'
 import { getDict } from '@/lib/i18n/server'
-import { getConnection } from '@/lib/repo/connections'
+import { targetOptions } from '@/lib/report/targets'
 import { listReports } from '@/lib/repo/reports'
 import { listTemplates } from '@/lib/repo/templates'
 import { requireUser } from '@/lib/session'
@@ -12,19 +12,25 @@ import { requireUser } from '@/lib/session'
 export default async function Home() {
   const user = await requireUser()
   const { t, locale } = await getDict()
-  const [h, conn, reports, templates] = await Promise.all([
+  const [h, options, reports, templates] = await Promise.all([
     health(),
-    getConnection(user.id, 'basecamp'),
+    targetOptions(user),
     listReports(user.id, 4),
     listTemplates(user.id),
   ])
-  const basecamp = getConnector('basecamp')
+  const connected = options.providers.filter((p) => p.connected)
+  const connectable = options.providers.filter((p) => p.configured && !p.connected)
+  const configuredConnectors = h.connectors.filter((c) => c.configured)
   const c = t.home.checks
 
   const checks: { label: string; value: string; tone: 'ok' | 'warn' | 'bad' | 'dim' | 'ink' }[] = [
     { label: c.database, value: h.database ? c.ok : c.unreachable, tone: h.database ? 'ok' : 'bad' },
     { label: c.key, value: h.encryptionKey ? c.ok : c.missing, tone: h.encryptionKey ? 'ok' : 'bad' },
-    { label: c.basecamp, value: h.basecamp ? c.ok : c.missing, tone: h.basecamp ? 'ok' : 'warn' },
+    {
+      label: c.basecamp,
+      value: configuredConnectors.length ? configuredConnectors.map((x) => x.label).join(', ') : c.missing,
+      tone: configuredConnectors.length ? 'ok' : 'dim',
+    },
     { label: c.ai, value: h.ai === 'on' ? h.aiProvider : c.fallback, tone: h.ai === 'on' ? 'ok' : 'dim' },
     {
       label: c.worker,
@@ -55,28 +61,33 @@ export default async function Home() {
         <h2 className="title" id="h-connect">
           {t.home.connectTitle}
         </h2>
-        <p className="muted">
-          {conn ? (
-            <>
-              {t.home.connectedAs} <strong>{conn.accountName}</strong>
-              {conn.meta.accounts?.length ? ` · ${conn.meta.accounts.map((a) => a.name).join(', ')}` : ''}
-            </>
-          ) : basecamp.isConfigured() ? (
-            t.home.notConnected
-          ) : (
-            t.home.notConfigured
-          )}
-        </p>
+        {connected.length || options.destinations.length ? (
+          <ul className="list">
+            {connected.map((p) => (
+              <li key={p.id}>
+                <span className="grow">{p.label}</span>
+                <span className="tag ok">{t.home.connectedTo}</span>
+              </li>
+            ))}
+            {options.destinations.map((d) => (
+              <li key={d.id}>
+                <span className="grow truncate">{d.name}</span>
+                <span className="tag ink">{d.kind}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">{t.home.noKanban}</p>
+        )}
         <div className="row push">
-          {conn ? (
-            <span className="tag ok">Basecamp</span>
-          ) : basecamp.isConfigured() ? (
-            <a className="btn primary" href="/api/connectors/basecamp/authorize">
-              {t.connect.connect}
+          {connectable.map((p) => (
+            <a key={p.id} className="btn primary" href={`/api/connectors/${p.id}/authorize`}>
+              {fmt(t.connect.connect, { tool: p.label })}
             </a>
-          ) : (
-            <span className="tag warn">.env</span>
-          )}
+          ))}
+          <Link className="btn" href="/connect">
+            + {t.connect.webhooksLabel}
+          </Link>
         </div>
         <Link href="/connect" className="arrow" aria-label={t.nav.connect}>
           ↗
@@ -168,6 +179,9 @@ export default async function Home() {
           <span className="icon-btn">PDF</span>
           <span className="icon-btn">&lt;/&gt;</span>
           <span className="icon-btn">MD</span>
+          <span className="icon-btn">WA</span>
+          <span className="icon-btn">SL</span>
+          <span className="icon-btn">TM</span>
         </div>
       </section>
     </div>

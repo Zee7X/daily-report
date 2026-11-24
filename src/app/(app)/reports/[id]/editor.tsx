@@ -3,15 +3,18 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CardPicker } from '@/components/card-picker'
 import { PrintIcon } from '@/components/icons'
+import { TargetChooser, type ProviderOption, type TargetValue } from '@/components/target-chooser'
 import { Coord, formatDate, StatusTag } from '@/components/ui'
 import { api, ApiError } from '@/lib/client'
 import type { RenderableImage } from '@/lib/connectors/types'
+import { fmt } from '@/lib/i18n/dict'
 import { useI18n } from '@/lib/i18n/client'
+import type { PublicDestination } from '@/lib/repo/destinations'
 import type { Job } from '@/lib/repo/jobs'
 import type { ReportSource, ReportTarget } from '@/lib/repo/reports'
-import { escapeHtml, LABELS, numberImages, renderHtml, renderMarkdown } from '@/lib/report/render'
+import { escapeHtml, LABELS, numberImages, renderChat, renderHtml, renderMarkdown, type ChatStyle } from '@/lib/report/render'
+import type { TargetInfo } from '@/lib/report/targets'
 import type { ReportBody, ReportImage } from '@/lib/report/types'
 import { ImagesPanel } from './images'
 import { PostDialog } from './post-dialog'
@@ -22,9 +25,11 @@ export type EditorData = {
   templateName: string | null
   sources: ReportSource[]
   target: ReportTarget | null
+  targetInfo: TargetInfo | null
   images: ReportImage[]
   jobs: Job[]
-  connected: boolean
+  providers: ProviderOption[]
+  destinations: PublicDestination[]
   browser: boolean
   cloud: boolean
 }
@@ -44,6 +49,8 @@ export function Editor({ initial }: { initial: EditorData }) {
   const [status, setStatus] = useState(initial.report.status)
   const [images, setImages] = useState(initial.images)
   const [target, setTarget] = useState(initial.target)
+  const [targetInfo, setTargetInfo] = useState(initial.targetInfo)
+  const [pendingTarget, setPendingTarget] = useState<TargetValue>(null)
   const [jobs, setJobs] = useState(initial.jobs)
   const [save, setSave] = useState<SaveState>('saved')
   const [preview, setPreview] = useState(false)
@@ -108,11 +115,15 @@ export function Editor({ initial }: { initial: EditorData }) {
 
   // ── jobs polling ───────────────────────────────────────────────────
   const reload = useCallback(async () => {
-    const v = await api<{ images: ReportImage[]; target: ReportTarget | null; report: { status: 'draft' | 'posted' } }>(
-      `/api/reports/${id}`,
-    )
+    const v = await api<{
+      images: ReportImage[]
+      target: ReportTarget | null
+      targetInfo: TargetInfo | null
+      report: { status: 'draft' | 'posted' }
+    }>(`/api/reports/${id}`)
     setImages(v.images)
     setTarget(v.target)
+    setTargetInfo(v.targetInfo)
     setStatus(v.report.status)
   }, [id])
 
@@ -134,7 +145,9 @@ export function Editor({ initial }: { initial: EditorData }) {
               setPosting(false)
               if (j.status === 'done') {
                 setPostOpen(false)
-                notify(t.post.done)
+                const res = j.result as { note?: string | null; destination?: string } | null
+                const done = res?.destination ? t.post.sent : t.post.done
+                notify(res?.note ? `${done} ${res.note}` : done)
               } else notify(`${t.post.failed}: ${j.error ?? ''}`, true)
             } else if (j.status === 'failed') notify(`Screenshot: ${j.error ?? t.common.error}`, true)
           }
@@ -253,10 +266,38 @@ export function Editor({ initial }: { initial: EditorData }) {
     }
   }
 
-  const changeTarget = async (cardId: string, provider: string) => {
+  // Format salin untuk aplikasi chat. Teams menerima HTML sederhana (tebal, bullet) + teks biasa sebagai cadangan.
+  const copyChat = async (style: ChatStyle) => {
+    const text = renderChat(body, renderables, labels, style)
+    const name = { whatsapp: 'WhatsApp', slack: 'Slack', teams: 'Teams' }[style]
     try {
-      const r = await api<{ target: ReportTarget }>(`/api/reports/${id}/target`, { method: 'PUT', json: { provider, cardId } })
+      if (style === 'teams' && typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+        const html = renderHtml(body, renderables, labels, (_img, caption) => `<p><em>[${escapeHtml(caption)}]</em></p>`, {
+          headingTag: 'h3',
+        })
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+          }),
+        ])
+      } else await navigator.clipboard.writeText(text)
+      notify(`${name} · ${t.common.copied}`)
+    } catch (e) {
+      notify((e as Error).message, true)
+    }
+  }
+
+  const saveTarget = async () => {
+    try {
+      const r = pendingTarget
+        ? await api<{ target: ReportTarget; targetInfo: TargetInfo }>(`/api/reports/${id}/target`, {
+            method: 'PUT',
+            json: { provider: pendingTarget.provider, cardId: pendingTarget.cardId },
+          })
+        : await api<{ target: null; targetInfo: null }>(`/api/reports/${id}/target`, { method: 'DELETE' })
       setTarget(r.target)
+      setTargetInfo(r.targetInfo)
       setChangingTarget(false)
     } catch (e) {
       notify((e as Error).message, true)
@@ -305,15 +346,21 @@ export function Editor({ initial }: { initial: EditorData }) {
       <section className="cell span-4 tight" aria-label={t.editor.actions}>
         <Coord c="A2" />
         <p className="label">{t.editor.actions}</p>
-        <button
-          type="button"
-          className="btn primary"
-          disabled={!target || !initial.connected || posting}
-          onClick={() => setPostOpen(true)}
-          title={!target ? t.post.needTarget : undefined}
-        >
-          {posting ? t.post.posting : `${t.editor.post} ↗`}
-        </button>
+        {target && targetInfo ? (
+          <button
+            type="button"
+            className="btn primary"
+            disabled={!targetInfo.ready || posting}
+            onClick={() => setPostOpen(true)}
+            title={!targetInfo.ready ? t.editor.targetNotReady : undefined}
+          >
+            {posting
+              ? t.post.posting
+              : `${fmt(targetInfo.kind === 'webhook' ? t.editor.sendTo : t.editor.postTo, { tool: targetInfo.label })} ↗`}
+          </button>
+        ) : (
+          <p className="small">{t.editor.noTargetHint}</p>
+        )}
         <div className="row">
           <button type="button" className="icon-btn" onClick={downloadPdf} aria-label={t.editor.pdf} title={t.editor.pdf}>
             PDF
@@ -323,6 +370,15 @@ export function Editor({ initial }: { initial: EditorData }) {
           </button>
           <button type="button" className="icon-btn" onClick={copyMd} aria-label={t.editor.copyMd} title={t.editor.copyMd}>
             MD
+          </button>
+          <button type="button" className="icon-btn" onClick={() => copyChat('whatsapp')} aria-label={t.editor.copyWa} title={t.editor.copyWa}>
+            WA
+          </button>
+          <button type="button" className="icon-btn" onClick={() => copyChat('slack')} aria-label={t.editor.copySlack} title={t.editor.copySlack}>
+            SL
+          </button>
+          <button type="button" className="icon-btn" onClick={() => copyChat('teams')} aria-label={t.editor.copyTeams} title={t.editor.copyTeams}>
+            TM
           </button>
           <a className="icon-btn" href={`/print/${id}`} target="_blank" rel="noreferrer" aria-label={t.editor.print} title={t.editor.print}>
             <PrintIcon />
@@ -393,21 +449,30 @@ export function Editor({ initial }: { initial: EditorData }) {
             )}
           </div>
         ) : (
-          <p className="small">{t.editor.noTarget}</p>
+          <p className="small">{t.newReport.targetNone} — {t.editor.noTargetHint}</p>
         )}
-        {initial.connected &&
-          (changingTarget ? (
-            <>
-              <CardPicker onPick={(c) => changeTarget(c.cardId, c.provider)} />
+        {changingTarget ? (
+          <>
+            <TargetChooser
+              providers={initial.providers}
+              destinations={initial.destinations}
+              initialMode={target ? (target.provider === 'webhook' ? 'webhook' : 'card') : 'none'}
+              onChange={setPendingTarget}
+            />
+            <div className="row">
+              <button type="button" className="btn sm primary" onClick={saveTarget}>
+                {t.common.save}
+              </button>
               <button type="button" className="btn sm ghost" onClick={() => setChangingTarget(false)}>
                 {t.common.cancel}
               </button>
-            </>
-          ) : (
-            <button type="button" className="btn sm" onClick={() => setChangingTarget(true)}>
-              {t.editor.changeTarget}
-            </button>
-          ))}
+            </div>
+          </>
+        ) : (
+          <button type="button" className="btn sm" onClick={() => setChangingTarget(true)}>
+            {t.editor.changeTarget}
+          </button>
+        )}
       </section>
 
       <section className="cell span-4 tight">
@@ -460,10 +525,11 @@ export function Editor({ initial }: { initial: EditorData }) {
         </div>
       </section>
 
-      {target && (
+      {target && targetInfo && (
         <PostDialog
           open={postOpen}
           target={target}
+          info={targetInfo}
           imageCount={renderables.length}
           busy={posting}
           onClose={() => setPostOpen(false)}

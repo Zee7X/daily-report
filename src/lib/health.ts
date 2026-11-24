@@ -8,7 +8,7 @@ import { listConnectors } from './connectors'
 export type Health = {
   database: boolean
   encryptionKey: boolean
-  basecamp: boolean
+  connectors: { id: string; label: string; configured: boolean }[]
   ai: 'on' | 'fallback'
   aiProvider: string
   worker: 'ok' | 'off' | 'unreachable'
@@ -26,7 +26,7 @@ export async function health(): Promise<Health> {
   return {
     database,
     encryptionKey: !configIssues().some((i) => i.key === 'ENCRYPTION_KEY'),
-    basecamp: listConnectors().some((c) => c.id === 'basecamp' && c.isConfigured()),
+    connectors: listConnectors().map((c) => ({ id: c.id, label: c.label, configured: c.isConfigured() })),
     ai: aiEnabled() ? 'on' : 'fallback',
     aiProvider: env.aiProvider,
     worker,

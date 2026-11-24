@@ -3,7 +3,7 @@ import { browserEnabled } from '@/lib/browser'
 import { env } from '@/lib/env'
 import { HttpError } from '@/lib/http'
 import { loadReportView } from '@/lib/report/service'
-import { getConnection } from '@/lib/repo/connections'
+import { targetOptions } from '@/lib/report/targets'
 import { getTemplate } from '@/lib/repo/templates'
 import { requireUser } from '@/lib/session'
 import { Editor, type EditorData } from './editor'
@@ -17,9 +17,9 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   })
-  const [template, conn] = await Promise.all([
+  const [template, options] = await Promise.all([
     view.report.templateId ? getTemplate(user.id, view.report.templateId) : null,
-    getConnection(user.id, 'basecamp'),
+    targetOptions(user),
   ])
   const data: EditorData = JSON.parse(
     JSON.stringify({
@@ -34,9 +34,11 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       templateName: template?.name ?? null,
       sources: view.sources,
       target: view.target,
+      targetInfo: view.targetInfo,
       images: view.images,
       jobs: view.jobs,
-      connected: Boolean(conn),
+      providers: options.providers,
+      destinations: options.destinations,
       browser: browserEnabled(),
       cloud: env.isCloud,
     }),

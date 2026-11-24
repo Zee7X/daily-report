@@ -18,8 +18,10 @@ import {
   saveFinalLog,
   setReportStatus,
 } from '../repo/reports'
+import { getDestination } from '../repo/destinations'
 import { getUser } from '../repo/users'
 import { storage } from '../storage'
+import { KIND_LABEL, sendWebhook, type WebhookImage } from '../webhooks'
 
 type Handler = (job: Job) => Promise<Record<string, unknown>>
 
@@ -74,15 +76,32 @@ const postHandler: Handler = async (job) => {
   const report = await getReport(job.userId, p.reportId)
   if (!user || !report) throw new Error('Laporan tidak ditemukan')
   const target = await getTarget(report.id)
-  if (!target) throw new Error('Kartu tujuan belum dipilih')
+  if (!target) throw new Error('Tujuan posting belum dipilih')
+  const labels = LABELS[user.locale]
+
+  // Tujuan webhook: Discord/Slack/Teams/JSON umum. Webhook tidak bisa mengedit pesan lama, jadi selalu kirim baru.
+  if (target.provider === 'webhook') {
+    const dest = await getDestination(user.id, target.cardId)
+    if (!dest) throw new Error('Webhook tujuan sudah dihapus')
+    const images: WebhookImage[] = []
+    for (const img of renderable(await listImages(report.id))) {
+      images.push({ id: img.id, number: img.number, caption: img.caption, mime: img.row.mime, data: await storage().get(img.row.storageKey) })
+    }
+    const result = await sendWebhook(dest, { id: report.id, title: report.title, body: report.body, images, labels })
+    await markPosted(target.id, { commentId: result.messageId ?? `sent:${job.id}`, url: result.url, jobId: job.id })
+    await setReportStatus(report.id, 'posted')
+    const log = await getDraftLog(report.id)
+    if (log) await saveFinalLog(log.id, report.body, computeEditDiff(log.draftBody, report.body))
+    return { mode: 'new', destination: KIND_LABEL[dest.kind], images: result.imagesSent, note: result.note, url: result.url }
+  }
+
   const { connector, conn } = await requireConnection(user.id, target.provider)
 
   // Idempoten: bila percobaan sebelumnya dari job ini sudah berhasil membuat komentar, perbarui saja.
   let mode = p.mode
   if (mode === 'new' && target.lastPostJobId === job.id && target.postedCommentId) mode = 'update'
-  if (mode === 'update' && !target.postedCommentId) mode = 'new'
+  if (mode === 'update' && (!target.postedCommentId || !connector.updateReport)) mode = 'new'
 
-  const labels = LABELS[user.locale]
   const images: RenderableImage[] = []
   for (const img of renderable(await listImages(report.id))) {
     let ref

@@ -204,9 +204,14 @@ function cardPath(r: Ref) {
 export const basecamp: Connector = {
   id: 'basecamp',
   label: 'Basecamp',
+  supportsLogin: true,
 
   isConfigured() {
     return Boolean(env.basecamp.clientId && env.basecamp.clientSecret)
+  },
+
+  redirectUri() {
+    return env.basecamp.redirectUri
   },
 
   authorizeUrl(state: string) {

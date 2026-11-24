@@ -1,17 +1,18 @@
 import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { Coord } from '@/components/ui'
-import { getConnector } from '@/lib/connectors'
+import { listConnectors } from '@/lib/connectors'
+import { fmt } from '@/lib/i18n/dict'
 import { getDict } from '@/lib/i18n/server'
 import { currentUser } from '@/lib/session'
 
 export const metadata = { title: 'Login' }
 
-// FR-1: login aplikasi (mode cloud) lewat "Login with Basecamp".
+// FR-1: login aplikasi (mode cloud) lewat connector yang mendukung login, mis. "Login with Basecamp".
 export default async function LoginPage() {
   if (await currentUser()) redirect('/')
   const { t } = await getDict()
-  const configured = getConnector('basecamp').isConfigured()
+  const providers = listConnectors().filter((c) => c.supportsLogin && c.isConfigured())
   return (
     <div className="grid">
       <div className="blob low" aria-hidden />
@@ -27,10 +28,12 @@ export default async function LoginPage() {
         </h1>
         <p className="muted">{t.login.text}</p>
         <div className="row">
-          {configured ? (
-            <a className="btn primary" href="/api/connectors/basecamp/authorize?intent=login">
-              {t.login.button} ↗
-            </a>
+          {providers.length ? (
+            providers.map((c) => (
+              <a key={c.id} className="btn primary" href={`/api/connectors/${c.id}/authorize?intent=login`}>
+                {fmt(t.login.button, { tool: c.label })} ↗
+              </a>
+            ))
           ) : (
             <p className="notice">{t.login.notConfigured}</p>
           )}
