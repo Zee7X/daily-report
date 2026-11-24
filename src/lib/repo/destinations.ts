@@ -30,12 +30,12 @@ const map = (r: Row): Destination => ({
 })
 
 export function toPublic(d: Destination): PublicDestination {
-  let hint = ''
+  // Hanya host yang ditampilkan: path/query webhook sering berisi token.
+  let hint = '—'
   try {
-    const u = new URL(d.url)
-    hint = `${u.host}${u.pathname.length > 18 ? `${u.pathname.slice(0, 14)}…` : u.pathname}`
+    hint = `${new URL(d.url).host}/…`
   } catch {
-    hint = '—'
+    /* URL rusak: tetap tanpa detail */
   }
   return { id: d.id, kind: d.kind, name: d.name, urlHint: hint, hasSecret: Boolean(d.secret) }
 }

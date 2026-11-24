@@ -1,14 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
 // Pemisahan domain (opsional, aktif bila AUTH_URL berbeda dari APP_URL):
-// - AUTH_URL (mis. https://daily-report.vercel.app) hanya melayani login dan callback OAuth.
-// - APP_URL (mis. https://daily-report.lumelo.my.id) melayani aplikasinya; /login diarahkan ke AUTH_URL.
+// - AUTH_URL (mis. https://daily-report-lumelo.vercel.app) hanya melayani form login dan callback OAuth,
+//   dan tidak pernah menyimpan sesi.
+// - APP_URL (mis. https://daily-report.lumelo.my.id) melayani aplikasi. /login di sini memasang cookie nonce
+//   lalu dialihkan ke AUTH_URL; hasil login hanya diterima kembali oleh browser yang memegang nonce itu.
 // Proxy hanya membaca host dan path, tanpa akses database.
 
 const AUTH_PATHS = [
   /^\/login$/,
-  /^\/api\/auth\//,
-  /^\/api\/connectors\/[^/]+\/(authorize|callback)$/,
+  /^\/api\/auth\/(login|signup)$/,
+  /^\/api\/connectors\/[^/]+\/callback$/,
   /^\/api\/locale$/,
   /^\/api\/health$/,
 ]
@@ -42,7 +44,19 @@ export function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL(pathname + search, app), 307)
   }
   if (host === app.host && pathname === '/login') {
-    return NextResponse.redirect(new URL(pathname + search, auth), 307)
+    const nonce = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
+    const target = new URL('/login', auth)
+    req.nextUrl.searchParams.forEach((v, k) => k !== 'n' && target.searchParams.set(k, v))
+    target.searchParams.set('n', nonce)
+    const res = NextResponse.redirect(target, 307)
+    res.cookies.set('rt_hn', nonce, {
+      httpOnly: true,
+      secure: app.protocol === 'https:',
+      sameSite: 'lax',
+      path: '/api/auth/handoff',
+      maxAge: 600,
+    })
+    return res
   }
   return pass(req)
 }

@@ -2,7 +2,7 @@
   <img src="assets/logo.png" alt="Daily Report Logo" width="120" />
 </p>
 
-# Daily Report — Report Tool
+# Daily Report
 
 Web untuk menyusun laporan progres kerja. Ambil bahan dari kartu kanban (pertama: **Basecamp**) atau tulis sendiri, centang poin dan gambar yang perlu, lalu kirim dalam satu klik:
 
@@ -84,7 +84,7 @@ Perbedaan mode hanya ada di `.env`.
 
 Alur lama: agen AI di laptop mengetes fitur, lalu membuat HTML + PDF di `Pictures\Report\<MODUL>\`. Setelah itu teks masih diedit, disalin ke Basecamp, gambar dilampirkan ulang, dan subtask dicentang manual.
 
-Dengan Report Tool, pekerjaan setelah testing pindah ke satu halaman:
+Dengan Daily Report, pekerjaan setelah testing pindah ke satu halaman:
 
 1. **Bahan**: pilih kartu Basecamp (deskripsi, step, komentar dibaca otomatis), dan/atau tempel catatan sendiri. Ringkasan hasil testing dari Claude bisa langsung ditempel di sini, tidak perlu dijadikan HTML dulu.
 2. **Gambar**: upload screenshot hasil testing, atau ambil screenshot dari daftar URL. Mode lokal bisa memotret `localhost` (fitur yang belum di-deploy); mode cloud hanya URL publik, jadi screenshot localhost diupload.
@@ -92,7 +92,7 @@ Dengan Report Tool, pekerjaan setelah testing pindah ke satu halaman:
 4. **Pilih**: centang poin dan gambar yang ikut, urutkan, tempel gambar ke poin. Yang tidak dicentang tidak terkirim.
 5. **Kirim**: *Post ke Basecamp* (gambar jadi lampiran asli, subtask bisa dicentang), kirim ke webhook (Discord/Slack/Teams/n8n), atau salin untuk WhatsApp. PDF tetap ada sebagai cadangan.
 
-Claude tetap dipakai untuk testing dan merangkum hasilnya; Report Tool mengambil alih bagian merapikan dan mengirim.
+Claude tetap dipakai untuk testing dan merangkum hasilnya; Daily Report mengambil alih bagian merapikan dan mengirim.
 
 ## Fitur
 
@@ -266,10 +266,9 @@ https://daily-report.vercel.app/api/connectors/basecamp/callback
 Bila `AUTH_URL` diisi:
 
 - `/login` di `daily-report.lumelo.my.id` dialihkan ke `AUTH_URL`. Form email/password, "Login with Basecamp", dan callback OAuth hanya berjalan di sana.
-- Setelah login berhasil, sesi diserahkan ke `APP_URL` lewat token sekali pakai yang berlaku 60 detik, hanya sah untuk domain tujuan, dan hanya hash-nya yang disimpan.
-- "Connect Basecamp" dari domain lumelo juga mampir ke `AUTH_URL` dengan cara yang sama, lalu kembali ke halaman Koneksi.
-- Sesi di domain login hanya berlaku 15 menit. Logout menghapus sesi di kedua domain.
-- Halaman aplikasi yang dibuka di domain `.vercel.app` dialihkan ke `APP_URL`.
+- Setelah login berhasil, sesi diserahkan ke `APP_URL` lewat token sekali pakai yang berlaku 60 detik, hanya sah untuk domain tujuan dan browser yang memulai login, dan hanya hash-nya yang disimpan.
+- "Login with Basecamp" dan "Connect Basecamp" dimulai di domain lumelo; Basecamp mengembalikan ke callback di `AUTH_URL`, lalu alur diselesaikan kembali di domain lumelo.
+- Domain login tidak menyimpan sesi sama sekali. Halaman aplikasi yang dibuka di domain `.vercel.app` dialihkan ke `APP_URL`.
 
 Peringatan merah di domain baru biasanya salah satu dari dua hal: sertifikat HTTPS belum terbit (tunggu beberapa menit setelah DNS benar), atau Google Safe Browsing menandai domain baru yang punya halaman login sebagai phishing. Memindahkan semua form login ke domain `.vercel.app` mengurangi risiko yang kedua, tapi tidak menjaminnya. Bila tetap muncul, verifikasi domain di Google Search Console lalu minta peninjauan ulang.
 
@@ -313,17 +312,29 @@ db/migrations/        skema SQL (tanpa stored procedure, trigger, atau foreign k
 
 Implementasikan antarmuka `Connector` di `src/lib/connectors/types.ts` (OAuth, `listBoards`, `listColumns`, `listCards`, `getCard`, `parseCardUrl`, `renderReport`, `postReport`, dan opsional `uploadImage`, `updateReport`, `setChecklist`, `supportsLogin`), lalu daftarkan di `src/lib/connectors/index.ts`. Halaman beranda, koneksi, login, pemilih kartu, dan tombol posting membaca daftar connector dan kemampuannya sendiri, jadi tidak perlu diubah. Contoh: connector tanpa `setChecklist` otomatis tidak menampilkan opsi centang subtask.
 
-## Keamanan
+## Keamanan dan privasi
 
-- Token OAuth dienkripsi AES-256-GCM. Client Secret hanya dipakai di server.
+**Pemisahan data antar pengguna**
+- Setiap laporan, gambar, template, webhook, koneksi Basecamp, dan job terikat ke satu pengguna. Semua route API memeriksa sesi, lalu query database selalu memakai `user_id` pengguna itu. Pengguna lain mendapat 404, bukan data.
+- Token Basecamp, URL webhook, dan secret HMAC disimpan terenkripsi AES-256-GCM dan hanya dibuka di server saat dipakai. Tidak ada endpoint yang mengirimkannya ke browser; daftar webhook hanya menampilkan host-nya.
+- Gambar privat. URL gambar ditandatangani dan kedaluwarsa dalam 1 jam, dan tetap butuh sesi pemilik laporan, jadi URL yang tersebar tidak bisa dibuka orang lain.
+- Teks mirip password/token dari kartu Basecamp disamarkan sebelum masuk draf maupun prompt AI.
+- Di mode cloud, pesan error internal tidak dikirim ke browser.
+
+**Login dan sesi**
 - Password disimpan sebagai hash scrypt; percobaan login dibatasi 10 kali per 15 menit per email.
-- Cookie sesi dan state OAuth ditandatangani HMAC, `HttpOnly`, `SameSite=Lax`, dan `Secure` di mode cloud.
-- Serah-terima sesi antar domain memakai token acak sekali pakai (60 detik, terikat domain tujuan); parameter `next` hanya menerima path di aplikasi ini.
+- Cookie sesi ditandatangani HMAC, `HttpOnly`, `SameSite=Lax`, dan `Secure` di mode cloud. Logout membatalkan semua sesi pengguna di semua perangkat.
+- Mode tanpa login (`SINGLE_USER`) tidak pernah aktif di Vercel.
+- Domain login (`AUTH_URL`) tidak menyimpan sesi. Hasil login diserahkan ke `APP_URL` lewat token acak sekali pakai (60 detik, terikat domain tujuan) yang juga harus cocok dengan cookie nonce di browser yang memulai login. Link serah-terima milik orang lain tidak bisa dipakai.
+- OAuth Basecamp menyimpan state di server. Hasilnya baru dipakai di browser yang memulai alur, dan untuk "Connect" hanya oleh pengguna yang sama, jadi token Basecamp tidak bisa "dibelokkan" ke akun lain.
+- Email belum diverifikasi saat daftar dengan password (tidak ada SMTP). Bila pemilik asli email itu kemudian "Login with Basecamp", password yang dibuat orang lain dihapus dan semua sesinya dibatalkan. Untuk `SIGNUP_ALLOWED_EMAILS` berbasis domain (`@kantor.com`), sarankan pengguna memakai "Login with Basecamp".
+
+**Lainnya**
 - Request yang mengubah data dari Origin lain ditolak.
-- Gambar privat, hanya bisa dibuka lewat URL bertanda tangan yang kedaluwarsa dalam 1 jam.
 - Jenis file upload dicek dari isinya (magic bytes), bukan dari nama file.
-- Mode cloud menolak screenshot ke localhost dan alamat jaringan privat, di aplikasi dan di worker.
+- Mode cloud menolak screenshot dan webhook ke localhost atau jaringan privat.
 - Request ke Basecamp dibatasi 40 per 10 detik per akun, dengan retry dan backoff untuk 429/5xx.
+- Bila AI diaktifkan, isi bahan laporan (setelah penyamaran) dikirim ke provider AI yang dipilih.
 
 ## Lisensi
 

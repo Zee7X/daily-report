@@ -2,7 +2,7 @@
   "name": "daily-report",
   "version": "2.0.0",
   "private": true,
-  "description": "Report Tool: susun laporan progres dari kanban (Basecamp), pilih poin dan gambar, lalu posting dalam satu klik.",
+  "description": "Daily Report: susun laporan progres dari kanban (Basecamp), pilih poin dan gambar, lalu posting dalam satu klik.",
   "author": "Zee7X",
   "license": "MIT",
   "type": "module",

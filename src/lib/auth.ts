@@ -78,40 +78,121 @@ export function safeNext(next: string | null | undefined, fallback = '/'): strin
 }
 
 const HANDOFF_TTL_MS = 60_000
-const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
+export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
+
+/** Cookie nonce di APP_URL, dipasang proxy saat /login dialihkan ke AUTH_URL. */
+export const HANDOFF_NONCE_COOKIE = 'rt_hn'
+/** Cookie nonce OAuth di domain yang memulai alur (authorize → complete). */
+export const OAUTH_NONCE_COOKIE = 'rt_os'
 
 /**
- * Token sekali pakai untuk memindahkan sesi ke domain lain milik aplikasi ini (AUTH_URL ⇄ APP_URL).
- * Hanya hash token yang disimpan; token terikat ke satu domain tujuan dan kedaluwarsa dalam 60 detik.
+ * Token sekali pakai untuk menyerahkan hasil login di AUTH_URL ke APP_URL.
+ * Hanya hash token yang disimpan; token terikat ke domain tujuan, kedaluwarsa dalam 60 detik,
+ * dan hanya bisa dipakai oleh browser yang memegang cookie nonce dari awal alur login.
  */
-export async function handoffUrl(userId: string, targetBase: string, next: string, path = '/api/auth/handoff'): Promise<string> {
+export async function handoffUrl(userId: string, targetBase: string, next: string, nonce: string): Promise<string> {
   const token = randomBytes(32).toString('base64url')
   await exec('DELETE FROM auth_handoffs WHERE expires_at < ?', [new Date(Date.now() - 3600_000)])
-  await exec('INSERT INTO auth_handoffs (token_hash, user_id, audience, expires_at) VALUES (?, ?, ?, ?)', [
+  await exec('INSERT INTO auth_handoffs (token_hash, user_id, audience, nonce_hash, expires_at) VALUES (?, ?, ?, ?, ?)', [
     sha256(token),
     userId,
     hostOf(targetBase),
+    sha256(nonce),
     new Date(Date.now() + HANDOFF_TTL_MS),
   ])
-  const u = new URL(path, targetBase)
+  const u = new URL('/api/auth/handoff', targetBase)
   u.searchParams.set('t', token)
   u.searchParams.set('next', safeNext(next))
   return u.toString()
 }
 
-export async function consumeHandoff(token: string, host: string): Promise<string | null> {
+export async function consumeHandoff(token: string, host: string, nonce: string): Promise<string | null> {
+  if (!token || !nonce) return null
   const hash = sha256(token)
   const res = await exec(
-    'UPDATE auth_handoffs SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? AND audience = ?',
-    [new Date(), hash, new Date(), host],
+    'UPDATE auth_handoffs SET used_at = ? WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? AND audience = ? AND nonce_hash = ?',
+    [new Date(), hash, new Date(), host, sha256(nonce)],
   )
   if (res.affectedRows !== 1) return null
   const row = await one<{ user_id: string }>('SELECT user_id FROM auth_handoffs WHERE token_hash = ?', [hash])
   return row?.user_id ?? null
 }
 
-/** URL tujuan setelah login berhasil: langsung, atau lewat serah-terima ke APP_URL bila login terjadi di AUTH_URL. */
-export async function afterLoginUrl(userId: string, next: string): Promise<string | null> {
-  if (await onAuthHost()) return handoffUrl(userId, env.appUrl, next)
-  return null
+// ── state OAuth (disimpan di server) ────────────────────────────────────
+// authorize (domain asal) → penyedia → callback (domain redirect URI) → complete (domain asal).
+// Hasil OAuth baru dipakai di langkah "complete", yang butuh dua bukti sekaligus: cookie nonce dari browser
+// yang memulai alur, dan kunci sekali pakai yang hanya diterima browser yang menyetujui di penyedia.
+// Untuk "connect", sesi yang aktif juga harus pengguna yang memulai alur.
+
+const OAUTH_TTL_MS = 10 * 60 * 1000
+
+export type OAuthState = {
+  provider: string
+  intent: 'login' | 'connect'
+  userId: string | null
+  returnBase: string
+  nextPath: string
+  result: string | null
+}
+
+export async function createOAuthState(s: Omit<OAuthState, 'result'>): Promise<{ state: string; nonce: string }> {
+  const state = randomBytes(24).toString('base64url')
+  const nonce = randomBytes(24).toString('base64url')
+  await exec('DELETE FROM oauth_states WHERE expires_at < ?', [new Date(Date.now() - 3600_000)])
+  await exec(
+    'INSERT INTO oauth_states (state_hash, provider, intent, user_id, nonce_hash, return_base, next_path, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [sha256(state), s.provider, s.intent, s.userId, sha256(nonce), s.returnBase, safeNext(s.nextPath), new Date(Date.now() + OAUTH_TTL_MS)],
+  )
+  return { state, nonce }
+}
+
+type StateRow = { provider: string; intent: string; user_id: string | null; return_base: string; next_path: string; result: string | null }
+const mapState = (r: StateRow): OAuthState => ({
+  provider: r.provider,
+  intent: r.intent === 'login' ? 'login' : 'connect',
+  userId: r.user_id,
+  returnBase: r.return_base,
+  nextPath: r.next_path,
+  result: r.result,
+})
+
+/** Callback: tandai state terpakai (sekali), kembalikan isinya. */
+export async function useOAuthState(state: string, provider: string): Promise<OAuthState | null> {
+  const hash = sha256(state)
+  const res = await exec(
+    'UPDATE oauth_states SET used_at = ? WHERE state_hash = ? AND provider = ? AND used_at IS NULL AND expires_at > ?',
+    [new Date(), hash, provider, new Date()],
+  )
+  if (res.affectedRows !== 1) return null
+  const r = await one<StateRow>('SELECT * FROM oauth_states WHERE state_hash = ?', [hash])
+  return r ? mapState(r) : null
+}
+
+/** Menyimpan hasil OAuth terenkripsi dan mengembalikan kunci penyelesaian untuk browser yang menyetujui. */
+export async function saveOAuthResult(state: string, encryptedResult: string): Promise<string> {
+  const key = randomBytes(24).toString('base64url')
+  await exec('UPDATE oauth_states SET result = ?, completion_hash = ? WHERE state_hash = ?', [encryptedResult, sha256(key), sha256(state)])
+  return key
+}
+
+/** Complete: hanya sekali, hanya dengan nonce yang cocok, dan hanya bila callback sudah selesai. */
+export async function completeOAuthState(state: string, nonce: string, key: string): Promise<OAuthState | null> {
+  if (!state || !nonce || !key) return null
+  const hash = sha256(state)
+  const res = await exec(
+    'UPDATE oauth_states SET completed_at = ? WHERE state_hash = ? AND nonce_hash = ? AND completion_hash = ? AND used_at IS NOT NULL AND completed_at IS NULL AND result IS NOT NULL AND expires_at > ?',
+    [new Date(), hash, sha256(nonce), sha256(key), new Date()],
+  )
+  if (res.affectedRows !== 1) return null
+  const r = await one<StateRow>('SELECT * FROM oauth_states WHERE state_hash = ?', [hash])
+  if (!r) return null
+  // Hasil (token terenkripsi) dihapus dari tabel setelah diambil.
+  await exec('UPDATE oauth_states SET result = NULL WHERE state_hash = ?', [hash])
+  return mapState(r)
+}
+
+/** Base URL untuk host saat ini: APP_URL atau AUTH_URL (tidak pernah dari header mentah). */
+export async function currentBase(): Promise<string> {
+  const host = await currentHost()
+  return env.splitAuth && host === hostOf(env.authUrl) ? env.authUrl : env.appUrl
 }

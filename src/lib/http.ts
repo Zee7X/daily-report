@@ -1,6 +1,7 @@
 import 'server-only'
 import { NextResponse, type NextRequest } from 'next/server'
 import { ZodError } from 'zod'
+import { env } from './env'
 import { currentUser } from './session'
 import type { User } from './repo/users'
 
@@ -43,7 +44,8 @@ export function errorResponse(err: unknown) {
     return NextResponse.json({ error: 'invalid_input', issues: err.issues }, { status: 400 })
   }
   console.error(err)
-  const message = err instanceof Error ? err.message : 'Internal error'
+  // Di mode cloud, detail error internal (SQL, API pihak ketiga) tidak dikirim ke browser.
+  const message = env.isCloud ? 'Terjadi kesalahan di server' : err instanceof Error ? err.message : 'Internal error'
   return NextResponse.json({ error: 'internal', message }, { status: 500 })
 }
 
