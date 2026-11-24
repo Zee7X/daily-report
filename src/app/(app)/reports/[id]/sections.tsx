@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useConfirm } from '@/components/confirm'
 import { ImageIcon } from '@/components/icons'
 import { useI18n } from '@/lib/i18n/client'
 import { newId, type ReportBody, type ReportImage, type ReportItem, type ReportSection } from '@/lib/report/types'
@@ -34,6 +35,7 @@ function AutoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) 
 // FR-7: centang poin, edit teks, ubah urutan. Semua bisa dioperasikan dengan keyboard.
 export function SectionsEditor({ body, images, numbers, onChange }: Props) {
   const { t } = useI18n()
+  const confirm = useConfirm()
   const [attachOpen, setAttachOpen] = useState<string | null>(null)
 
   const setSections = (sections: ReportSection[]) => onChange({ ...body, sections })
@@ -104,8 +106,11 @@ export function SectionsEditor({ body, images, numbers, onChange }: Props) {
               type="button"
               className="icon-btn"
               aria-label={t.editor.deleteSection}
-              onClick={() => {
-                if (s.items.some((i) => i.text.trim()) && !confirm(t.common.confirmDelete)) return
+              onClick={async () => {
+                if (s.items.some((i) => i.text.trim())) {
+                  const ok = await confirm({ title: t.confirm.deleteSection, body: t.common.confirmDelete, confirmLabel: t.common.delete, danger: true })
+                  if (!ok) return
+                }
                 setSections(body.sections.filter((_, i) => i !== si))
               }}
             >

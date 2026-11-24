@@ -1,5 +1,6 @@
 import { Coord } from '@/components/ui'
 import { envAiEnabled, MODEL_PRESETS } from '@/lib/ai'
+import { isAdmin } from '@/lib/auth'
 import { listConnectors } from '@/lib/connectors'
 import { env } from '@/lib/env'
 import { getDict } from '@/lib/i18n/server'
@@ -8,7 +9,7 @@ import { getAiSetting, toPublicAi } from '@/lib/repo/ai-settings'
 import { getConnection, isTokenAuth } from '@/lib/repo/connections'
 import { listDestinations, toPublic } from '@/lib/repo/destinations'
 import { requireUser } from '@/lib/session'
-import { AiPanel, ConnectorCard, WebhooksManager, type ConnectorView, type OneClickView } from './client'
+import { AiPanel, ConnectorCard, FlashToast, WebhooksManager, type ConnectorView, type OneClickView } from './client'
 
 export async function generateMetadata() {
   return { title: (await getDict()).t.titles.connect }
@@ -16,6 +17,7 @@ export async function generateMetadata() {
 
 export default async function ConnectPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const user = await requireUser()
+  const admin = await isAdmin(user)
   const { t } = await getDict()
   const sp = await searchParams
 
@@ -36,8 +38,10 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
           imagesAsFiles: c.imagesAsFiles,
           supportsLogin: Boolean(c.supportsLogin),
           canChecklist: Boolean(c.setChecklist),
-          setup: c.setup,
-          redirectUri: c.redirectUri(),
+          admin,
+          // Panduan pendaftaran hanya dikirim ke admin.
+          setup: admin ? c.setup : null,
+          redirectUri: admin ? c.redirectUri() : null,
         }
       }),
     ),
@@ -47,8 +51,11 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
 
   const oneClick = (id: 'discord' | 'slack'): OneClickView => {
     const i = getIntegration(id)!
-    return { id, label: i.label, configured: i.isConfigured(), setup: i.setup, redirectUri: i.redirectUri() }
+    return { id, label: i.label, configured: i.isConfigured(), setup: admin ? i.setup : null, redirectUri: admin ? i.redirectUri() : null }
   }
+  // Non-admin hanya melihat konektor yang bisa dipakai: OAuth sudah diaktifkan atau ada token pribadi.
+  const visible = admin ? connectors : connectors.filter((c) => c.configured || c.token)
+  const chat = [oneClick('discord'), oneClick('slack')].filter((o) => admin || o.configured)
 
   const done = sp.connected ? (t.integrations.done[sp.connected] ?? t.connect.connected) : null
   const error = sp.error ? (t.integrations.errors[sp.error] ?? sp.error) : null
@@ -63,26 +70,19 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
         <p className="muted">{t.connect.subtitle}</p>
       </section>
 
-      {(done || error) && (
-        <section className="cell span-12 tight">
-          {done && <p className="notice ok">{done}</p>}
-          {error && (
-            <p className="notice bad" role="alert">
-              {t.connect.error}: {error}
-            </p>
-          )}
+      <FlashToast done={done} error={error ? `${t.connect.error}: ${error}` : null} />
+
+      {visible.length > 0 && (
+        <section className="cell span-12 tight" aria-labelledby="h-kanban">
+          <Coord c="B0" />
+          <p className="label">{t.integrations.kanbanLabel}</p>
+          <h2 className="title" id="h-kanban" style={{ maxWidth: 'none' }}>
+            {t.integrations.kanbanTitle}
+          </h2>
+          <p className="muted">{t.integrations.kanbanText}</p>
         </section>
       )}
-
-      <section className="cell span-12 tight" aria-labelledby="h-kanban">
-        <Coord c="B0" />
-        <p className="label">{t.integrations.kanbanLabel}</p>
-        <h2 className="title" id="h-kanban" style={{ maxWidth: 'none' }}>
-          {t.integrations.kanbanTitle}
-        </h2>
-        <p className="muted">{t.integrations.kanbanText}</p>
-      </section>
-      {connectors.map((c, i) => (
+      {visible.map((c, i) => (
         <section key={c.id} className="cell span-4" aria-label={c.label}>
           <Coord c={`B${i + 1}`} />
           <ConnectorCard c={c} />
@@ -96,7 +96,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
           {t.integrations.chatTitle}
         </h2>
         <p className="muted">{t.integrations.chatText}</p>
-        <WebhooksManager initial={destinations.map(toPublic)} cloud={env.isCloud} oneClick={[oneClick('discord'), oneClick('slack')]} />
+        <WebhooksManager initial={destinations.map(toPublic)} cloud={env.isCloud} oneClick={chat} />
       </section>
 
       <section className="cell span-6" aria-labelledby="h-ai">

@@ -2,6 +2,10 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { BrandIcon } from '@/components/brand-icons'
+import { useConfirm } from '@/components/confirm'
+import { Select } from '@/components/select'
+import { useToast } from '@/components/toast'
 import { api } from '@/lib/client'
 import type { Board, ConnectorSetup, TokenField } from '@/lib/connectors/types'
 import { fmt } from '@/lib/i18n/dict'
@@ -21,8 +25,10 @@ export type ConnectorView = {
   imagesAsFiles: boolean
   supportsLogin: boolean
   canChecklist: boolean
-  setup: ConnectorSetup
-  redirectUri: string
+  admin: boolean
+  /** null untuk non-admin: panduan pendaftaran tidak dikirim ke browser mereka. */
+  setup: ConnectorSetup | null
+  redirectUri: string | null
 }
 
 export type OneClickView = {
@@ -30,7 +36,7 @@ export type OneClickView = {
   label: string
   configured: boolean
   setup: ConnectorSetup | null
-  redirectUri: string
+  redirectUri: string | null
 }
 
 function SetupDetails({ id, setup, redirectUri }: { id: string; setup: ConnectorSetup; redirectUri: string }) {
@@ -38,7 +44,7 @@ function SetupDetails({ id, setup, redirectUri }: { id: string; setup: Connector
   return (
     <details>
       <summary className="small" style={{ cursor: 'pointer' }}>
-        {t.integrations.adminSetup}
+        {t.integrations.adminSetup} <span className="label">{t.integrations.adminOnly}</span>
       </summary>
       <div className="stack" style={{ marginTop: 8 }}>
         <ol className="small" style={{ paddingLeft: 18, margin: 0 }}>
@@ -65,29 +71,28 @@ function TokenForm({ c }: { c: ConnectorView & { token: NonNullable<ConnectorVie
   const { t } = useI18n()
   const router = useRouter()
   const [values, setValues] = useState<Record<string, string>>({})
+  const { toast } = useToast()
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
-    setMsg(null)
     try {
       const r = await api<{ account: string }>(`/api/connectors/${c.id}/token`, { method: 'POST', json: values })
       setValues({})
-      setMsg({ text: fmt(t.integrations.tokenSaved, { name: r.account }) })
+      toast(fmt(t.integrations.tokenSaved, { name: r.account }))
       router.refresh()
     } catch (err) {
-      setMsg({ text: (err as Error).message, bad: true })
+      toast((err as Error).message, { bad: true })
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <details>
+    <details open={!c.admin && !c.configured && !c.connected}>
       <summary className="small" style={{ cursor: 'pointer' }}>
-        {c.connected && c.tokenHint ? t.integrations.tokenReplace : t.integrations.tokenUse}
+        {c.connected && c.tokenHint ? t.integrations.tokenReplace : !c.admin && c.configured ? t.integrations.tokenOther : t.integrations.tokenUse}
       </summary>
       <form className="stack" style={{ marginTop: 8 }} onSubmit={save}>
         <p className="small">{t.integrations.tokenHelp[c.id]}</p>
@@ -110,11 +115,6 @@ function TokenForm({ c }: { c: ConnectorView & { token: NonNullable<ConnectorVie
           </label>
         ))}
         <p className="small">{t.integrations.tokenSecret}</p>
-        {msg && (
-          <p className={`notice ${msg.bad ? 'bad' : 'ok'}`} role={msg.bad ? 'alert' : 'status'}>
-            {msg.text}
-          </p>
-        )}
         <div className="row">
           <button className="btn primary" type="submit" disabled={busy || c.token.fields.some((f) => !values[f.name]?.trim())}>
             {busy ? t.common.saving : t.integrations.tokenSave}
@@ -128,12 +128,17 @@ function TokenForm({ c }: { c: ConnectorView & { token: NonNullable<ConnectorVie
 export function ConnectorCard({ c }: { c: ConnectorView }) {
   const { t } = useI18n()
   const router = useRouter()
+  const confirm = useConfirm()
+  const { toast } = useToast()
   const [busy, setBusy] = useState(false)
   const available = c.configured || Boolean(c.token)
   return (
     <>
       <div className="row between">
-        <p className="subtitle">{c.label}</p>
+        <p className="subtitle row" style={{ flexWrap: 'nowrap' }}>
+          <BrandIcon id={c.id} size={18} />
+          {c.label}
+        </p>
         <span className={`tag ${c.connected ? 'ok' : 'dim'}`}>{c.connected ? t.integrations.connected : available ? t.integrations.available : 'off'}</span>
       </div>
       {c.connected && c.accountName && <p className="small">{c.accountName}</p>}
@@ -161,22 +166,36 @@ export function ConnectorCard({ c }: { c: ConnectorView }) {
       <div className="row push">
         {c.configured ? (
           <a className={`btn ${c.connected ? '' : 'primary'}`} href={`/api/connectors/${c.id}/authorize`}>
+            <BrandIcon id={c.id} />
             {c.connected ? t.integrations.connect : fmt(t.connect.connect, { tool: c.label })}
           </a>
         ) : c.token ? (
           !c.connected && <span className="small">{t.integrations.tokenOnly}</span>
         ) : (
-          <span className="small">{c.id === 'basecamp' ? t.integrations.basecampAdmin : t.integrations.notEnabled}</span>
+          c.setup && <span className="small">{c.id === 'basecamp' ? t.integrations.basecampAdmin : t.integrations.notEnabled}</span>
         )}
         {c.connected && (
           <button
             className="btn danger"
             disabled={busy}
             onClick={async () => {
-              if (!confirm(fmt(t.connect.disconnectConfirm, { tool: c.label }))) return
+              const ok = await confirm({
+                title: fmt(t.confirm.disconnect, { tool: c.label }),
+                body: t.connect.disconnectConfirm,
+                confirmLabel: t.integrations.disconnect,
+                danger: true,
+              })
+              if (!ok) return
               setBusy(true)
-              await api(`/api/connectors/${c.id}`, { method: 'DELETE' }).catch(() => undefined)
-              router.refresh()
+              try {
+                await api(`/api/connectors/${c.id}`, { method: 'DELETE' })
+                toast(fmt(t.connect.disconnected, { tool: c.label }))
+                router.refresh()
+              } catch (err) {
+                toast((err as Error).message, { bad: true })
+              } finally {
+                setBusy(false)
+              }
             }}
           >
             {t.integrations.disconnect}
@@ -184,7 +203,7 @@ export function ConnectorCard({ c }: { c: ConnectorView }) {
         )}
       </div>
       {c.token && <TokenForm c={{ ...c, token: c.token }} />}
-      {!c.configured && <SetupDetails id={c.id} setup={c.setup} redirectUri={c.redirectUri} />}
+      {!c.configured && c.setup && c.redirectUri && <SetupDetails id={c.id} setup={c.setup} redirectUri={c.redirectUri} />}
     </>
   )
 }
@@ -242,13 +261,13 @@ export function WebhooksManager({ initial, cloud, oneClick }: { initial: PublicD
   const [url, setUrl] = useState('')
   const [secret, setSecret] = useState('')
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
+  const confirm = useConfirm()
+  const { toast } = useToast()
   const current = KINDS.find((k) => k.id === kind)!
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
-    setMsg(null)
     try {
       const r = await api<{ destination: PublicDestination }>('/api/destinations', {
         method: 'POST',
@@ -259,51 +278,57 @@ export function WebhooksManager({ initial, cloud, oneClick }: { initial: PublicD
       setUrl('')
       setSecret('')
     } catch (err) {
-      setMsg({ text: (err as Error).message, bad: true })
+      toast((err as Error).message, { bad: true })
     } finally {
       setBusy(false)
     }
   }
 
   const test = async (id: string) => {
-    setMsg(null)
     try {
       await api(`/api/destinations/${id}/test`, { method: 'POST' })
-      setMsg({ text: t.connect.webhookTestOk })
+      toast(t.connect.webhookTestOk)
     } catch (err) {
-      setMsg({ text: (err as Error).message, bad: true })
+      toast((err as Error).message, { bad: true })
     }
   }
 
   const remove = async (id: string) => {
-    if (!confirm(t.connect.webhookDeleteConfirm)) return
-    await api(`/api/destinations/${id}`, { method: 'DELETE' })
-    setItems((prev) => prev.filter((x) => x.id !== id))
+    const ok = await confirm({ title: t.confirm.deleteWebhook, body: t.connect.webhookDeleteConfirm, confirmLabel: t.common.delete, danger: true })
+    if (!ok) return
+    try {
+      await api(`/api/destinations/${id}`, { method: 'DELETE' })
+      setItems((prev) => prev.filter((x) => x.id !== id))
+    } catch (err) {
+      toast((err as Error).message, { bad: true })
+    }
   }
 
   return (
     <div className="stack" style={{ gap: 14 }}>
+      {oneClick.length > 0 && (
       <div className="row">
         {oneClick.map((o) =>
           o.configured ? (
             <a key={o.id} className="btn primary" href={`/api/integrations/${o.id}/authorize`}>
-              + {o.label}
+              <BrandIcon id={o.id} />+ {o.label}
             </a>
           ) : (
             <span key={o.id} className="btn" aria-disabled="true" style={{ opacity: 0.45, pointerEvents: 'none' }}>
-              + {o.label}
+              <BrandIcon id={o.id} />+ {o.label}
             </span>
           ),
         )}
       </div>
+      )}
       {oneClick
-        .filter((o) => !o.configured && o.setup)
+        .filter((o) => !o.configured && o.setup && o.redirectUri)
         .map((o) => (
           <div key={o.id}>
             <p className="small">
               {o.label}: {t.integrations.notEnabled}
             </p>
-            <SetupDetails id={o.id} setup={o.setup!} redirectUri={o.redirectUri} />
+            <SetupDetails id={o.id} setup={o.setup!} redirectUri={o.redirectUri!} />
           </div>
         ))}
 
@@ -332,11 +357,6 @@ export function WebhooksManager({ initial, cloud, oneClick }: { initial: PublicD
         </ul>
       ) : (
         <div className="empty skeleton">{t.connect.webhookEmpty}</div>
-      )}
-      {msg && (
-        <p className={`notice ${msg.bad ? 'bad' : 'ok'}`} role="status">
-          {msg.text}
-        </p>
       )}
 
       <details>
@@ -397,14 +417,13 @@ function ModelPicker({
   }
   const known = options.some((o) => o.id === value)
   return (
-    <select className="select" value={known ? value : ''} onChange={(e) => onChange(e.target.value)} required>
-      {!known && <option value="">{value || '—'}</option>}
-      {options.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.label}
-        </option>
-      ))}
-    </select>
+    <Select
+      value={known ? value : ''}
+      onChange={onChange}
+      placeholder={value || '—'}
+      options={options.map((p) => ({ value: p.id, label: p.label }))}
+      required
+    />
   )
 }
 
@@ -427,18 +446,17 @@ export function AiPanel({
   const [model, setModel] = useState('')
   const [models, setModels] = useState<string[] | null>(null)
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
+  const { toast } = useToast()
 
   const loadModels = async (body: { baseUrl?: string; apiKey?: string }) => {
-    setMsg(null)
     setBusy(true)
     try {
       const r = await api<{ models: string[] }>('/api/ai/models', { method: 'POST', json: body })
       setModels(r.models)
       if (!model && r.models[0]) setModel(r.models[0])
-      setMsg({ text: `${r.models.length} ${t.integrations.aiModelsFound}` })
+      toast(`${r.models.length} ${t.integrations.aiModelsFound}`)
     } catch (err) {
-      setMsg({ text: (err as Error).message, bad: true })
+      toast((err as Error).message, { bad: true })
     } finally {
       setBusy(false)
     }
@@ -456,7 +474,6 @@ export function AiPanel({
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
-    setMsg(null)
     try {
       const r = await api<{ setting: PublicAiSetting }>('/api/ai', {
         method: 'POST',
@@ -464,9 +481,9 @@ export function AiPanel({
       })
       setSetting(r.setting)
       setApiKey('')
-      setMsg({ text: t.integrations.aiSaved })
+      toast(t.integrations.aiSaved)
     } catch (err) {
-      setMsg({ text: (err as Error).message, bad: true })
+      toast((err as Error).message, { bad: true })
     } finally {
       setBusy(false)
     }
@@ -478,7 +495,7 @@ export function AiPanel({
       const r = await api<{ setting: PublicAiSetting }>('/api/ai', { method: 'PATCH', json: { model: m } })
       setSetting(r.setting)
     } catch (err) {
-      setMsg({ text: (err as Error).message, bad: true })
+      toast((err as Error).message, { bad: true })
     }
   }
 
@@ -509,7 +526,6 @@ export function AiPanel({
             placeholder={t.integrations.aiModelCustom}
           />
         </label>
-        {msg && <p className={`notice ${msg.bad ? 'bad' : 'ok'}`}>{msg.text}</p>}
         <div className="row push">
           <button className="btn danger" onClick={disconnect}>
             {t.integrations.aiDisconnect}
@@ -531,6 +547,7 @@ export function AiPanel({
       <p className="small">{builtIn ? t.integrations.aiBuiltIn : t.integrations.aiNone}</p>
       <div className="row">
         <a className="btn primary" href="/api/integrations/openrouter/authorize">
+          <BrandIcon id="openrouter" />
           {t.integrations.aiConnect} ↗
         </a>
       </div>
@@ -550,7 +567,6 @@ export function AiPanel({
                   setProvider(p.id)
                   setModel('')
                   setModels(null)
-                  setMsg(null)
                 }}
               >
                 {p.label}
@@ -596,7 +612,6 @@ export function AiPanel({
               placeholder={t.integrations.aiModelCustom}
             />
           </label>
-          {msg && <p className={`notice ${msg.bad ? 'bad' : 'ok'}`}>{msg.text}</p>}
           <div className="row">
             {provider === 'custom' && (
               <button type="button" className="btn" disabled={busy || !baseUrl} onClick={() => loadModels({ baseUrl, apiKey })}>
@@ -611,4 +626,17 @@ export function AiPanel({
       </details>
     </div>
   )
+}
+
+// Shows the OAuth redirect result once, then strips it from the URL.
+export function FlashToast({ done, error }: { done: string | null; error: string | null }) {
+  const router = useRouter()
+  const { toast } = useToast()
+  useEffect(() => {
+    if (done) toast(done)
+    if (error) toast(error, { bad: true })
+    if (done || error) router.replace('/connect')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return null
 }

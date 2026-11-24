@@ -215,6 +215,7 @@ Untuk pengembangan, pakai `npm run dev` sebagai ganti `build && start`. Worker b
 | `APP_URL` | URL publik aplikasi |
 | `AUTH_URL` | opsional: domain khusus login dan OAuth (lihat bagian Vercel) |
 | `SIGNUP_ALLOWED_EMAILS` | `*` = siapa saja, atau email/`@domain` dipisah koma; kosong = hanya akun pertama |
+| `ADMIN_EMAILS` | email admin dipisah koma; hanya admin yang melihat panduan pendaftaran OAuth di `/connect`. Kosong = akun tertua (pemilik) |
 | `QUOTA_AI_PER_DAY`, `QUOTA_REPORTS_PER_DAY`, `QUOTA_JOBS_PER_HOUR`, `QUOTA_STORAGE_MB` | kuota per pengguna; default 30, 50, 60, 200 |
 | `SINGLE_USER` | `true` = tanpa halaman login (hanya mode lokal) |
 | `DATABASE_URL` | `mysql://user:pass@host:port/db` (MySQL 8 atau TiDB) |
@@ -269,6 +270,7 @@ TLS aktif otomatis untuk host `tidbcloud.com`.
 | `DATABASE_URL` | dari langkah 1 |
 | `ENCRYPTION_KEY` | hasil `npm run gen:key` (simpan baik-baik) |
 | `SIGNUP_ALLOWED_EMAILS` | `*` untuk semua orang, atau daftar email/`@domain`, mis. `rizick076@gmail.com,@kantor.com`; kosong = hanya akun pertama |
+| `ADMIN_EMAILS` | opsional: email admin; kosong = akun tertua. Pengguna lain hanya melihat tombol Connect |
 | `BASECAMP_CLIENT_ID`, `BASECAMP_CLIENT_SECRET` | dari Launchpad |
 | `BASECAMP_USER_AGENT` | `Daily Report (email-kamu@example.com)` |
 | `AI_PROVIDER`, `AI_API_KEY` | opsional |

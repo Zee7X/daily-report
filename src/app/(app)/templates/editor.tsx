@@ -1,6 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { useConfirm } from '@/components/confirm'
+import { Select } from '@/components/select'
+import { useToast } from '@/components/toast'
 import { Coord } from '@/components/ui'
 import { api } from '@/lib/client'
 import { useI18n } from '@/lib/i18n/client'
@@ -24,12 +27,12 @@ export function TemplatesEditor({ initial }: { initial: Tpl[] }) {
   const [draft, setDraft] = useState<Draft | null>(initial[0] ? { ...initial[0] } : null)
   const [rulesText, setRulesText] = useState((initial[0]?.rules.rules ?? []).join('\n'))
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
+  const confirm = useConfirm()
+  const { toast } = useToast()
 
   const select = (tpl: Draft) => {
     setDraft(structuredClone(tpl))
     setRulesText(tpl.rules.rules.join('\n'))
-    setMsg(null)
   }
 
   const patch = (p: Partial<Draft>) => draft && setDraft({ ...draft, ...p })
@@ -41,7 +44,6 @@ export function TemplatesEditor({ initial }: { initial: Tpl[] }) {
     e.preventDefault()
     if (!draft) return
     setBusy(true)
-    setMsg(null)
     const payload = {
       name: draft.name,
       kind: draft.kind,
@@ -54,17 +56,24 @@ export function TemplatesEditor({ initial }: { initial: Tpl[] }) {
         : await api<{ template: Tpl }>('/api/templates', { method: 'POST', json: payload })
       setTemplates((prev) => (draft.id ? prev.map((x) => (x.id === r.template.id ? r.template : x)) : [...prev, r.template]))
       select(r.template)
-      setMsg({ text: t.common.saved })
+      toast(t.common.saved)
     } catch (err) {
-      setMsg({ text: (err as Error).message, bad: true })
+      toast((err as Error).message, { bad: true })
     } finally {
       setBusy(false)
     }
   }
 
   const remove = async () => {
-    if (!draft?.id || !confirm(t.common.confirmDelete)) return
-    await api(`/api/templates/${draft.id}`, { method: 'DELETE' })
+    if (!draft?.id) return
+    const ok = await confirm({ title: t.confirm.deleteTemplate, body: t.common.confirmDelete, confirmLabel: t.common.delete, danger: true })
+    if (!ok) return
+    try {
+      await api(`/api/templates/${draft.id}`, { method: 'DELETE' })
+    } catch (err) {
+      toast((err as Error).message, { bad: true })
+      return
+    }
     const rest = templates.filter((x) => x.id !== draft.id)
     setTemplates(rest)
     if (rest[0]) select(rest[0])
@@ -109,13 +118,11 @@ export function TemplatesEditor({ initial }: { initial: Tpl[] }) {
               </label>
               <label className="field" style={{ flex: 1 }}>
                 <span>{t.templates.kind}</span>
-                <select className="select" value={draft.kind} onChange={(e) => patch({ kind: e.target.value })}>
-                  {Object.entries(t.templates.kinds).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  value={draft.kind}
+                  onChange={(v) => patch({ kind: v })}
+                  options={Object.entries(t.templates.kinds).map(([k, v]) => ({ value: k, label: v }))}
+                />
               </label>
             </div>
 
@@ -186,10 +193,7 @@ export function TemplatesEditor({ initial }: { initial: Tpl[] }) {
               </label>
             </div>
 
-            <div className="row between">
-              <span role="status" className={msg?.bad ? 'notice bad' : 'small'}>
-                {msg?.text}
-              </span>
+            <div className="row" style={{ justifyContent: 'flex-end' }}>
               <div className="row">
                 {draft.id && (
                   <button type="button" className="btn danger" onClick={remove}>

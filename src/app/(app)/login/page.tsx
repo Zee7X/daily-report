@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import { redirect } from 'next/navigation'
+import { BrandIcon } from '@/components/brand-icons'
 import { Coord } from '@/components/ui'
 import { onAuthHost, safeNext } from '@/lib/auth'
 import { listConnectors } from '@/lib/connectors'
@@ -67,6 +68,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 className="btn"
                 href={`${env.appUrl}/api/connectors/${c.id}/authorize?intent=login&next=${encodeURIComponent(next)}`}
               >
+                <BrandIcon id={c.id} />
                 {fmt(t.login.button, { tool: c.label })} ↗
               </a>
             ))}

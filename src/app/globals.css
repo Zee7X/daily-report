@@ -368,6 +368,9 @@ a {
 .row.between {
   justify-content: space-between;
 }
+[hidden] {
+  display: none !important;
+}
 .stack {
   display: flex;
   flex-direction: column;
@@ -692,21 +695,65 @@ input[type='radio'] {
   text-align: center;
 }
 
-.toast {
+.toasts {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  width: max-content;
+  max-width: min(560px, 90vw);
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   background: var(--ink);
   color: var(--paper);
   font: 500 11px var(--font-mono);
   letter-spacing: 0.06em;
-  padding: 10px 16px;
-  z-index: 60;
-  max-width: min(560px, 90vw);
+  padding: 10px 12px 10px 16px;
+  max-width: 100%;
+  pointer-events: auto;
+  animation: toast-in 0.18s ease-out;
+  transition:
+    opacity 0.16s,
+    transform 0.16s;
 }
 .toast.bad {
   background: var(--bad);
+}
+.toast.leaving {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.toast button {
+  all: unset;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+  font-size: 14px;
+}
+.toast button:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 2px;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+    transition: none;
+  }
 }
 
 /* dua kolom di dalam satu sel, dipisah garis tipis */
@@ -1030,6 +1077,9 @@ dialog.sheet {
   background: var(--paper);
   color: var(--ink);
 }
+dialog.sheet.confirm {
+  width: min(420px, calc(100vw - 32px));
+}
 dialog.sheet::backdrop {
   background: rgba(246, 246, 244, 0.78);
   backdrop-filter: blur(3px);
@@ -1067,6 +1117,109 @@ dialog.sheet::backdrop {
 .option:has(input:checked) {
   border-color: var(--ink);
   box-shadow: inset 3px 0 0 var(--ink);
+}
+
+/* ── select (custom listbox) ────────────────────────────────────────── */
+
+.select-wrap {
+  position: relative;
+}
+.select-trigger {
+  display: block;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.select-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.select-panel {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-size: 13px;
+}
+.select-search {
+  flex: none;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.select-search:focus-visible {
+  outline-offset: -2px;
+}
+.select-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.select-group {
+  padding: 10px 10px 4px;
+  font: 500 10px var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+[role='group'] + [role='group'] > .select-group {
+  border-top: 1px solid var(--hair);
+  margin-top: 4px;
+}
+.select-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.select-txt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.select-opt[aria-selected='true'] {
+  box-shadow: inset 3px 0 0 var(--ink);
+  font-weight: 600;
+}
+.select-opt[data-active='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.select-opt[data-active='true'][aria-selected='true'] {
+  box-shadow: inset 3px 0 0 var(--paper);
+}
+.select-box {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid currentColor;
+  font-size: 10px;
+  line-height: 1;
+}
+.select-empty {
+  padding: 10px;
+  color: var(--ink-3);
+}
+@media (max-width: 640px) {
+  .select-opt {
+    min-height: 44px;
+  }
 }
 
 /* ── print ──────────────────────────────────────────────────────────── */

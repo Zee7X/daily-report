@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useConfirm } from '@/components/confirm'
 import { api } from '@/lib/client'
 import { useI18n } from '@/lib/i18n/client'
 import type { ReportImage } from '@/lib/report/types'
@@ -22,6 +23,7 @@ type Props = {
 // US-4: upload, screenshot dari URL, caption, urutan dengan drag (atau tombol panah), penomoran otomatis.
 export function ImagesPanel({ reportId, images, numbers, browser, cloud, onImages, onDeleted, onJobs, notify }: Props) {
   const { t } = useI18n()
+  const confirm = useConfirm()
   const fileRef = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -92,7 +94,8 @@ export function ImagesPanel({ reportId, images, numbers, browser, cloud, onImage
   }
 
   const remove = async (id: string) => {
-    if (!confirm(t.common.confirmDelete)) return
+    const ok = await confirm({ title: t.confirm.deleteImage, body: t.common.confirmDelete, confirmLabel: t.common.delete, danger: true })
+    if (!ok) return
     try {
       await api(`/api/reports/${reportId}/images/${id}`, { method: 'DELETE' })
       onImages(images.filter((i) => i.id !== id))

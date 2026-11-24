@@ -48,6 +48,18 @@ export async function canSignup(email: string): Promise<boolean> {
   return Number(row?.n ?? 0) === 0
 }
 
+/**
+ * Admin = pemilik situs: email di ADMIN_EMAILS, atau (bila kosong) akun tertua. Mode SINGLE_USER: pengguna lokal.
+ * Hanya mengatur apa yang ditampilkan (panduan pendaftaran OAuth); bukan batas keamanan.
+ */
+export async function isAdmin(user: { id: string; email: string }): Promise<boolean> {
+  if (env.singleUser) return true
+  const admins = env.adminEmails
+  if (admins.length) return admins.includes(user.email.toLowerCase())
+  const owner = await one<{ id: string }>('SELECT id FROM users WHERE email <> ? ORDER BY created_at ASC, id ASC LIMIT 1', [LOCAL_EMAIL])
+  return owner?.id === user.id
+}
+
 // ── domain login vs domain aplikasi ─────────────────────────────────────
 
 const hostOf = (url: string) => new URL(url).host

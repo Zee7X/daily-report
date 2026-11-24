@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { BrandIcon } from '@/components/brand-icons'
 import { Coord, formatDate, StatusTag } from '@/components/ui'
 import { aiFor } from '@/lib/ai'
 import { health } from '@/lib/health'
@@ -84,6 +85,7 @@ export default async function Home() {
         <div className="row push">
           {connectable.map((p) => (
             <a key={p.id} className="btn primary" href={p.configured ? `/api/connectors/${p.id}/authorize` : '/connect'}>
+              <BrandIcon id={p.id} />
               {fmt(t.connect.connect, { tool: p.label })}
             </a>
           ))}

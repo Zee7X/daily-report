@@ -27,6 +27,7 @@ export default async function NewReportPage() {
         <p className="muted">{t.newReport.subtitle}</p>
       </section>
       <NewReportForm
+        userId={user.id}
         templates={templates.map((tpl) => ({ id: tpl.id, name: tpl.name }))}
         providers={options.providers}
         destinations={options.destinations}

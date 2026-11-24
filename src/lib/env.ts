@@ -49,6 +49,13 @@ export const env = {
       .map((x) => x.trim().toLowerCase())
       .filter(Boolean)
   },
+  /** Email admin (pemilik) yang melihat panduan pendaftaran OAuth. Kosong = akun tertua (pemilik). */
+  get adminEmails(): string[] {
+    return str('ADMIN_EMAILS')
+      .split(',')
+      .map((x) => x.trim().toLowerCase())
+      .filter(Boolean)
+  },
   /** Mode satu pengguna hanya diizinkan di mode lokal. */
   /** Mode satu pengguna (tanpa login) hanya untuk komputer sendiri; tidak pernah aktif di Vercel. */
   get singleUser() {

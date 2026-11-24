@@ -3,7 +3,9 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirm } from '@/components/confirm'
 import { PrintIcon } from '@/components/icons'
+import { useToast } from '@/components/toast'
 import { TargetChooser, type ProviderOption, type TargetValue } from '@/components/target-chooser'
 import { Coord, formatDate, StatusTag } from '@/components/ui'
 import { api, ApiError } from '@/lib/client'
@@ -57,12 +59,9 @@ export function Editor({ initial }: { initial: EditorData }) {
   const [postOpen, setPostOpen] = useState(false)
   const [posting, setPosting] = useState(false)
   const [changingTarget, setChangingTarget] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; bad?: boolean } | null>(null)
-
-  const notify = useCallback((msg: string, bad = false) => {
-    setToast({ msg, bad })
-    window.setTimeout(() => setToast(null), 4000)
-  }, [])
+  const confirm = useConfirm()
+  const { toast, dismiss } = useToast()
+  const notify = useCallback((msg: string, bad = false) => toast(msg, { bad }), [toast])
 
   // ── autosave ───────────────────────────────────────────────────────
   const pending = useRef<{ title: string; body: ReportBody } | null>(null)
@@ -207,7 +206,7 @@ export function Editor({ initial }: { initial: EditorData }) {
 
   const downloadPdf = async () => {
     if (!(await flush())) return
-    notify(t.common.loading)
+    const loadingToast = notify(t.common.loading)
     const res = await fetch(`/api/reports/${id}/pdf`)
     if (res.ok) {
       const blob = await res.blob()
@@ -216,7 +215,7 @@ export function Editor({ initial }: { initial: EditorData }) {
       a.download = `${title.replace(/[\\/:*?"<>|]+/g, '').trim() || 'laporan'}.pdf`
       a.click()
       URL.revokeObjectURL(a.href)
-      setToast(null)
+      dismiss(loadingToast)
       return
     }
     const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
@@ -305,7 +304,8 @@ export function Editor({ initial }: { initial: EditorData }) {
   }
 
   const deleteReport = async () => {
-    if (!confirm(t.common.confirmDelete)) return
+    const ok = await confirm({ title: t.confirm.deleteReport, body: t.common.confirmDelete, confirmLabel: t.common.delete, danger: true })
+    if (!ok) return
     pending.current = null
     await api(`/api/reports/${id}`, { method: 'DELETE' })
     router.push('/reports')
@@ -535,12 +535,6 @@ export function Editor({ initial }: { initial: EditorData }) {
           onClose={() => setPostOpen(false)}
           onConfirm={startPost}
         />
-      )}
-
-      {toast && (
-        <div className={`toast ${toast.bad ? 'bad' : ''}`} role="status" aria-live="polite">
-          {toast.msg}
-        </div>
       )}
     </div>
   )
