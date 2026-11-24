@@ -46,10 +46,7 @@ class LocalStorage implements Storage {
   }
 
   async signedUrl(key: string, ttl = DEFAULT_TTL) {
-    assertSafeKey(key)
-    const exp = Math.floor(Date.now() / 1000) + ttl
-    const sig = sign(`${key}:${exp}`, 'file')
-    return `/api/files/${key}?e=${exp}&s=${sig}`
+    return appSignedUrl(key, ttl)
   }
 }
 
@@ -101,9 +98,49 @@ class S3Storage implements Storage {
   }
 }
 
+/**
+ * Vercel Blob dengan store privat. File tidak punya URL publik; browser membacanya lewat
+ * /api/files dengan signed URL aplikasi, lalu route itu mengambil isinya dari Blob di server.
+ * Autentikasi Blob memakai OIDC Vercel (otomatis bila store dihubungkan ke project) atau BLOB_READ_WRITE_TOKEN.
+ */
+class VercelBlobStorage implements Storage {
+  async put(key: string, data: Buffer, contentType: string) {
+    assertSafeKey(key)
+    const { put } = await import('@vercel/blob')
+    await put(key, data, { access: 'private', contentType, addRandomSuffix: false, allowOverwrite: true })
+  }
+
+  async get(key: string) {
+    assertSafeKey(key)
+    const { get } = await import('@vercel/blob')
+    const res = await get(key, { access: 'private' })
+    if (!res || res.statusCode !== 200 || !res.stream) throw new Error('File tidak ditemukan')
+    return Buffer.from(await new Response(res.stream).arrayBuffer())
+  }
+
+  async delete(key: string) {
+    assertSafeKey(key)
+    const { del } = await import('@vercel/blob')
+    await del(key)
+  }
+
+  async signedUrl(key: string, ttl = DEFAULT_TTL) {
+    return appSignedUrl(key, ttl)
+  }
+}
+
+function appSignedUrl(key: string, ttl: number) {
+  assertSafeKey(key)
+  const exp = Math.floor(Date.now() / 1000) + ttl
+  return `/api/files/${key}?e=${exp}&s=${sign(`${key}:${exp}`, 'file')}`
+}
+
 let instance: Storage | null = null
 
 export function storage(): Storage {
-  if (!instance) instance = env.storageDriver === 's3' ? new S3Storage() : new LocalStorage()
+  if (!instance) {
+    const d = env.storageDriver
+    instance = d === 's3' ? new S3Storage() : d === 'vercel-blob' ? new VercelBlobStorage() : new LocalStorage()
+  }
   return instance
 }

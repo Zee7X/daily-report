@@ -15,15 +15,39 @@ function oneOf<T extends string>(name: string, allowed: readonly T[], fallback: 
   return v
 }
 
+const onVercel = Boolean(process.env.VERCEL)
+
 export const env = {
+  get onVercel() {
+    return onVercel
+  },
+  /** Di Vercel default-nya cloud, di komputer sendiri default-nya lokal. */
   get appMode() {
-    return oneOf('APP_MODE', ['local', 'cloud'] as const, 'local')
+    return oneOf('APP_MODE', ['local', 'cloud'] as const, onVercel ? 'cloud' : 'local')
   },
   get isCloud() {
     return this.appMode === 'cloud'
   },
   get appUrl() {
-    return str('APP_URL', 'http://localhost:3000').replace(/\/$/, '')
+    const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    return str('APP_URL', vercelProd ? `https://${vercelProd}` : 'http://localhost:3000').replace(/\/$/, '')
+  },
+  /**
+   * Domain khusus untuk halaman login dan callback OAuth (mis. https://daily-report.vercel.app).
+   * Setelah login, sesi diserahkan ke APP_URL lewat token sekali pakai. Kosong = sama dengan APP_URL.
+   */
+  get authUrl() {
+    return str('AUTH_URL', this.appUrl).replace(/\/$/, '')
+  },
+  get splitAuth() {
+    return this.authUrl !== this.appUrl
+  },
+  /** Daftar email atau domain (@contoh.com) yang boleh membuat akun. Kosong = hanya akun pertama. */
+  get signupAllowed(): string[] {
+    return str('SIGNUP_ALLOWED_EMAILS')
+      .split(',')
+      .map((x) => x.trim().toLowerCase())
+      .filter(Boolean)
   },
   /** Mode satu pengguna hanya diizinkan di mode lokal. */
   get singleUser() {
@@ -32,11 +56,12 @@ export const env = {
   get databaseUrl() {
     return str('DATABASE_URL')
   },
+  /** TiDB Cloud wajib TLS; bila host-nya tidbcloud.com, TLS aktif walau DATABASE_SSL tidak diisi. */
   get databaseSsl() {
-    return str('DATABASE_SSL', 'false') === 'true'
+    return str('DATABASE_SSL', /tidbcloud\.com/.test(this.databaseUrl) ? 'true' : 'false') === 'true'
   },
   get storageDriver() {
-    return oneOf('STORAGE_DRIVER', ['local', 's3'] as const, 'local')
+    return oneOf('STORAGE_DRIVER', ['local', 's3', 'vercel-blob'] as const, onVercel ? 'vercel-blob' : 'local')
   },
   get storagePath() {
     return str('STORAGE_PATH', './storage')
@@ -76,7 +101,7 @@ export const env = {
     return str('JOBS_SECRET')
   },
   get browserDriver() {
-    return oneOf('BROWSER_DRIVER', ['local-worker', 'remote-worker', 'none'] as const, 'local-worker')
+    return oneOf('BROWSER_DRIVER', ['local-worker', 'remote-worker', 'none'] as const, onVercel ? 'none' : 'local-worker')
   },
   get browserWorkerUrl() {
     return str('BROWSER_WORKER_URL', 'http://127.0.0.1:3100').replace(/\/$/, '')
@@ -92,7 +117,7 @@ export const env = {
       return str('BASECAMP_CLIENT_SECRET')
     },
     get redirectUri() {
-      return str('BASECAMP_REDIRECT_URI', `${env.appUrl}/api/connectors/basecamp/callback`)
+      return str('BASECAMP_REDIRECT_URI', `${env.authUrl}/api/connectors/basecamp/callback`)
     },
     get userAgent() {
       return str('BASECAMP_USER_AGENT', 'Daily Report (report-tool)')
@@ -135,7 +160,7 @@ export function configIssues(): ConfigIssue[] {
   if (env.aiProvider === 'openai' && !env.aiModel) issues.push({ key: 'AI_MODEL', message: 'missing', level: 'warn' })
   if (env.isCloud && env.storageDriver === 'local')
     issues.push({ key: 'STORAGE_DRIVER', message: 'local_in_cloud', level: 'warn' })
-  if (env.isCloud && env.queueDriver === 'local')
-    issues.push({ key: 'QUEUE_DRIVER', message: 'local_in_cloud', level: 'warn' })
+  if (env.isCloud && env.appUrl.startsWith('http://'))
+    issues.push({ key: 'APP_URL', message: 'must_be_https', level: 'warn' })
   return issues
 }

@@ -8,6 +8,9 @@ import { requireReport, toClientImages } from '@/lib/report/service'
 import { addImage, listImages, reorderImages } from '@/lib/repo/reports'
 import { storage } from '@/lib/storage'
 
+// Job lokal berjalan lewat `after()` di fungsi ini, jadi batas durasinya ikut dinaikkan (Vercel).
+export const maxDuration = 300
+
 type Ctx = { params: Promise<{ id: string }> }
 
 const MAX_BYTES = 10 * 1024 * 1024 // US-4: maks. 10 MB per file
