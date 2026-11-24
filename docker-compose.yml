@@ -1,0 +1,55 @@
+# Mode lokal dalam satu perintah:  docker compose up --build
+# Butuh file .env (salin dari .env.example) minimal berisi ENCRYPTION_KEY dan kredensial Basecamp.
+# Nilai di bawah menimpa .env agar layanan saling terhubung di dalam jaringan Docker.
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: report_tool
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  worker:
+    build: ./worker
+    environment:
+      WORKER_TOKEN: ${BROWSER_WORKER_TOKEN:-}
+      # Screenshot http://localhost:xxxx diarahkan ke komputer host (dev server kamu)
+      LOCALHOST_ALIAS: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    shm_size: "1gb"
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      APP_MODE: local
+      DATABASE_URL: mysql://root:root@mysql:3306/report_tool
+      DATABASE_SSL: "false"
+      STORAGE_DRIVER: local
+      STORAGE_PATH: /data/storage
+      QUEUE_DRIVER: local
+      BROWSER_DRIVER: local-worker
+      BROWSER_WORKER_URL: http://worker:3100
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - app-storage:/data/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      worker:
+        condition: service_started
+
+volumes:
+  mysql-data:
+  app-storage:
