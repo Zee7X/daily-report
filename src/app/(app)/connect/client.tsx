@@ -163,47 +163,46 @@ export function ConnectorCard({ c }: { c: ConnectorView }) {
           </div>
         </details>
       )}
-      <div className="row push">
-        {c.configured ? (
-          <a className={`btn ${c.connected ? '' : 'primary'}`} href={`/api/connectors/${c.id}/authorize`}>
-            <BrandIcon id={c.id} />
-            {c.connected ? t.integrations.connect : fmt(t.connect.connect, { tool: c.label })}
-          </a>
-        ) : c.token ? (
-          !c.connected && <span className="small">{t.integrations.tokenOnly}</span>
-        ) : (
-          c.setup && <span className="small">{c.id === 'basecamp' ? t.integrations.basecampAdmin : t.integrations.notEnabled}</span>
-        )}
-        {c.connected && (
-          <button
-            className="btn danger"
-            disabled={busy}
-            onClick={async () => {
-              const ok = await confirm({
-                title: fmt(t.confirm.disconnect, { tool: c.label }),
-                body: t.connect.disconnectConfirm,
-                confirmLabel: t.integrations.disconnect,
-                danger: true,
-              })
-              if (!ok) return
-              setBusy(true)
-              try {
-                await api(`/api/connectors/${c.id}`, { method: 'DELETE' })
-                toast(fmt(t.connect.disconnected, { tool: c.label }))
-                router.refresh()
-              } catch (err) {
-                toast((err as Error).message, { bad: true })
-              } finally {
-                setBusy(false)
-              }
-            }}
-          >
-            {t.integrations.disconnect}
-          </button>
-        )}
-      </div>
+      {!c.configured && (c.token ? !c.connected && <p className="small">{t.integrations.tokenOnly}</p> : c.setup && <p className="small">{c.id === 'basecamp' ? t.integrations.basecampAdmin : t.integrations.notEnabled}</p>)}
       {c.token && <TokenForm c={{ ...c, token: c.token }} />}
       {!c.configured && c.setup && c.redirectUri && <SetupDetails id={c.id} setup={c.setup} redirectUri={c.redirectUri} />}
+      {(c.configured || c.connected) && (
+        <div className="row push">
+          {c.configured && (
+            <a className={`btn ${c.connected ? '' : 'primary'}`} href={`/api/connectors/${c.id}/authorize`}>
+              <BrandIcon id={c.id} />
+              {c.connected ? t.integrations.connect : fmt(t.connect.connect, { tool: c.label })}
+            </a>
+          )}
+          {c.connected && (
+            <button
+              className="btn danger"
+              disabled={busy}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: fmt(t.confirm.disconnect, { tool: c.label }),
+                  body: t.connect.disconnectConfirm,
+                  confirmLabel: t.integrations.disconnect,
+                  danger: true,
+                })
+                if (!ok) return
+                setBusy(true)
+                try {
+                  await api(`/api/connectors/${c.id}`, { method: 'DELETE' })
+                  toast(fmt(t.connect.disconnected, { tool: c.label }))
+                  router.refresh()
+                } catch (err) {
+                  toast((err as Error).message, { bad: true })
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              {t.integrations.disconnect}
+            </button>
+          )}
+        </div>
+      )}
     </>
   )
 }
