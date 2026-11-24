@@ -22,7 +22,7 @@ const sslOn = (process.env.DATABASE_SSL || (/tidbcloud\.com/.test(url) ? 'true' 
 const ssl = sslOn ? { minVersion: 'TLSv1.2', rejectUnauthorized: true } : undefined
 const base = {
   host: parsed.hostname,
-  port: Number(parsed.port || 3306),
+  port: Number(parsed.port || (/tidbcloud\.com$/.test(parsed.hostname) ? 4000 : 3306)),
   user: decodeURIComponent(parsed.username),
   password: decodeURIComponent(parsed.password),
   ssl,

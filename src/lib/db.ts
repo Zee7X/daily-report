@@ -1,4 +1,5 @@
 import 'server-only'
+import { attachDatabasePool } from '@vercel/functions'
 import mysql, { type Pool, type PoolConnection, type ResultSetHeader, type RowDataPacket } from 'mysql2/promise'
 import { env } from './env'
 
@@ -11,17 +12,27 @@ export function pool(): Pool {
   const u = new URL(env.databaseUrl)
   g.__rtPool = mysql.createPool({
     host: u.hostname,
-    port: Number(u.port || 3306),
+    // TiDB Cloud memakai port 4000; MySQL biasa 3306.
+    port: Number(u.port || (/tidbcloud\.com$/.test(u.hostname) ? 4000 : 3306)),
     user: decodeURIComponent(u.username),
     password: decodeURIComponent(u.password),
     database: decodeURIComponent(u.pathname.replace(/^\//, '')),
     ssl: env.databaseSsl ? { minVersion: 'TLSv1.2', rejectUnauthorized: true } : undefined,
     connectionLimit: env.isCloud ? 5 : 10,
     waitForConnections: true,
+    // Serverless + TiDB Cloud: gateway memutus koneksi yang lama menganggur. Koneksi menganggur ditutup
+    // cepat (5 dtk) dan keep-alive aktif, agar request berikutnya tidak tersangkut di koneksi mati.
+    maxIdle: env.isCloud ? 2 : 10,
+    idleTimeout: env.isCloud ? 5_000 : 60_000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10_000,
+    connectTimeout: 10_000,
     timezone: 'Z',
     dateStrings: false,
     charset: 'utf8mb4',
   })
+  // Vercel Fluid compute: tutup koneksi menganggur sebelum instance dibekukan.
+  if (env.onVercel) attachDatabasePool(g.__rtPool)
   return g.__rtPool
 }
 
