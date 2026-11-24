@@ -147,6 +147,37 @@ export function renderMarkdown(
     .trim()
 }
 
+export type ChatStyle = 'whatsapp' | 'slack' | 'teams'
+
+/**
+ * Teks biasa untuk aplikasi chat. Markdown standar sering rusak saat ditempel di WhatsApp/Slack,
+ * jadi dipakai sintaks masing-masing: *tebal* di WhatsApp dan Slack, **tebal** di Teams, bullet "•".
+ * Gambar tidak bisa ikut dalam teks, jadi ditulis sebagai rujukan [Gambar N: keterangan].
+ */
+export function renderChat(body: ReportBody, images: RenderableImage[], labels: ImageLabels, style: ChatStyle): string {
+  const bold = (s: string) => (style === 'teams' ? `**${s}**` : `*${s}*`)
+  const inline = (s: string) => s.trim().replace(/\*\*(.+?)\*\*/g, (_m, x: string) => bold(x))
+  const out: string[] = []
+  for (const b of layout(body, images, labels)) {
+    if (b.kind === 'intro' || b.kind === 'closing') {
+      if (out.length && out.at(-1) !== '') out.push('')
+      out.push(inline(b.text), '')
+    } else if (b.kind === 'heading') {
+      if (out.length && out.at(-1) !== '') out.push('')
+      out.push(bold(b.text.trim()))
+    } else if (b.kind === 'item') {
+      const [first, ...rest] = inline(b.text).split('\n')
+      out.push(`• ${first}${figureRef(b.figures, labels)}`, ...rest.map((l) => `   ${l}`))
+    } else if (b.kind === 'images') {
+      for (const img of b.images) out.push(`   [${figureCaption(img, labels)}]`)
+    }
+  }
+  return out
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 /** Dokumen HTML lengkap untuk PDF / tampilan cetak. */
 export function renderPrintDocument(
   title: string,

@@ -25,7 +25,11 @@ export type RenderableImage = { id: string; number: number; caption: string; ref
 export interface Connector {
   id: 'basecamp' | 'jira' | 'trello' | (string & {})
   label: string
+  /** Bisa dipakai sebagai "Login with …" di mode cloud. */
+  supportsLogin?: boolean
   isConfigured(): boolean
+  /** Redirect URI OAuth yang harus didaftarkan di tool (ditampilkan di halaman Koneksi). */
+  redirectUri(): string
   authorizeUrl(state: string): string
   handleCallback(code: string): Promise<{ connection: ConnectionInput; identity: Identity }>
   listBoards(conn: Connection): Promise<Board[]>

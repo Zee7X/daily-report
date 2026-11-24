@@ -8,7 +8,7 @@ import { useI18n } from '@/lib/i18n/client'
 export type PickedCard = { provider: string; cardId: string; title: string; url: string | null }
 
 // US-2: telusuri project → card table → kolom → kartu, atau tempel URL kartu (FR-3, FR-4).
-export function CardPicker({ provider = 'basecamp', onPick }: { provider?: string; onPick: (c: PickedCard) => void }) {
+export function CardPicker({ provider, onPick }: { provider: string; onPick: (c: PickedCard) => void }) {
   const { t } = useI18n()
   const uid = useId()
   const [mode, setMode] = useState<'browse' | 'paste'>('browse')

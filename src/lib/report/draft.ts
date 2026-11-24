@@ -132,8 +132,18 @@ export function fallbackDraft(input: DraftInput): ReportBody {
     for (const st of src.steps.filter((x) => !x.completed)) push(1, `${prefix}${st.title}`)
     for (const c of src.comments.slice(-5)) push(2, `${prefix}${clip(c.text, 300)}`, false)
   }
-  for (const line of input.notes.split('\n').map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean)) {
-    push(0, maskSecrets(line))
+  // Catatan: baris yang sama dengan judul bagian (mis. "Sedang dikerjakan:") memindahkan poin berikutnya ke bagian itu.
+  const norm = (s: string) => s.toLowerCase().replace(/[:：]\s*$/, '').replace(/^#+\s*/, '').trim()
+  let current = 0
+  for (const raw of input.notes.split('\n')) {
+    const line = raw.replace(/^\s*[-*•]\s*/, '').trim()
+    if (!line) continue
+    const idx = sections.findIndex((s) => norm(s.title) === norm(line))
+    if (idx >= 0 && !/^\s*[-*•]/.test(raw)) {
+      current = idx
+      continue
+    }
+    push(current, maskSecrets(line))
   }
   return { intro: template.rules.intro, sections, closing: template.rules.closing }
 }

@@ -6,6 +6,7 @@ import { getReport, getTarget, listImages, listSources, type ImageRow } from '..
 import type { User } from '../repo/users'
 import { storage } from '../storage'
 import { LABELS, numberImages, renderPrintDocument } from './render'
+import { describeTarget } from './targets'
 import type { ReportImage } from './types'
 
 export async function requireReport(user: User, id: string) {
@@ -38,7 +39,7 @@ export async function loadReportView(user: User, id: string) {
     listImages(id),
     listReportJobs(id, 20),
   ])
-  return { report, sources, target, images: await toClientImages(images), jobs }
+  return { report, sources, target, targetInfo: await describeTarget(user, target), images: await toClientImages(images), jobs }
 }
 
 export function renderable(rows: ImageRow[]): (RenderableImage & { row: ImageRow })[] {

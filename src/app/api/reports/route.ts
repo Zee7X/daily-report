@@ -4,6 +4,7 @@ import { requireConnection } from '@/lib/connectors'
 import type { CardDetail } from '@/lib/connectors/types'
 import { api, HttpError } from '@/lib/http'
 import { composeDraft } from '@/lib/report/draft'
+import { resolveTarget, WEBHOOK } from '@/lib/report/targets'
 import { createReport, listReports } from '@/lib/repo/reports'
 import { getTemplate } from '@/lib/repo/templates'
 
@@ -42,7 +43,12 @@ export const POST = api(async (req, { user }) => {
   }
 
   const sources = await Promise.all(input.sources.map(fetchCard))
-  const targetCard = input.target ? await fetchCard(input.target) : null
+  // Tujuan kartu yang sama dengan sumber memakai data yang sudah diambil; webhook dicari di tabel destinations.
+  const target = !input.target
+    ? null
+    : input.target.provider === WEBHOOK
+      ? await resolveTarget(user, input.target)
+      : await fetchCard(input.target).then((c) => ({ provider: input.target!.provider, cardId: c.id, cardUrl: c.url, cardTitle: c.title }))
 
   const draft = await composeDraft({ template, sources, notes: input.notes, locale: user.locale })
 
@@ -58,10 +64,7 @@ export const POST = api(async (req, { user }) => {
       url: sources[i].url,
       title: sources[i].title,
     })),
-    target:
-      input.target && targetCard
-        ? { provider: input.target.provider, cardId: input.target.cardId, cardUrl: targetCard.url, cardTitle: targetCard.title }
-        : null,
+    target,
   })
   return NextResponse.json({ id, usedAi: draft.usedAi, warning: draft.warning }, { status: 201 })
 })

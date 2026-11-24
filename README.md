@@ -4,7 +4,13 @@
 
 # Daily Report — Report Tool
 
-Web untuk menyusun laporan progres dari kanban (pertama: **Basecamp**). Ambil bahan dari kartu, centang poin dan gambar yang perlu, lalu posting ke kartu tujuan dalam satu klik. Gambar terlampir sebagai file asli Basecamp, bukan tempelan yang bisa hilang.
+Web untuk menyusun laporan progres kerja. Ambil bahan dari kartu kanban (pertama: **Basecamp**) atau tulis sendiri, centang poin dan gambar yang perlu, lalu kirim dalam satu klik:
+
+- **ke kartu kanban**: komentar dengan gambar sebagai lampiran asli, bukan tempelan yang bisa hilang;
+- **lewat webhook**: Discord, Slack, Microsoft Teams, atau JSON untuk n8n/Zapier/Make;
+- **atau salin saja**: format siap tempel untuk WhatsApp, Slack, Teams, HTML, Markdown, dan PDF.
+
+Tidak memakai kanban? Tetap bisa dipakai penuh: tulis bahannya, susun, lalu salin atau kirim lewat webhook.
 
 Satu repo Next.js, dua mode:
 
@@ -21,20 +27,28 @@ Perbedaan mode hanya ada di `.env`.
 
 ## Tampilan
 
-**Beranda**: status koneksi, laporan terakhir, template, dan pemeriksaan sistem.
+**Beranda**: koneksi dan webhook, laporan terakhir, template, dan pemeriksaan sistem.
 
 ![Beranda](assets/screenshots/home.png)
 
-**Laporan baru**: pilih template, kartu sumber, dan kartu tujuan.
+**Laporan baru, dari kartu**: pilih template, kartu sumber, dan tujuan.
 
-![Laporan baru](assets/screenshots/new-report.png)
+![Laporan baru dari kartu](assets/screenshots/new-report.png)
 
-**Editor draf**: centang bagian, poin, dan gambar, lalu ubah urutannya. Gambar ditempel ke poin dan dinomori otomatis.
+**Laporan baru, tulis sendiri**: tanpa kanban. Baris yang sama dengan judul bagian (mis. `Sedang dikerjakan:`) memindahkan poin berikutnya ke bagian itu. Tujuan bisa webhook atau *Salin saja*.
+
+![Laporan baru tulis sendiri](assets/screenshots/new-report-write.png)
+
+**Editor draf**: centang bagian, poin, dan gambar, lalu ubah urutannya. Gambar ditempel ke poin dan dinomori otomatis. Tombol `WA`, `SL`, dan `TM` menyalin format WhatsApp, Slack, dan Teams.
 
 ![Editor draf](assets/screenshots/editor.png)
 
+**Koneksi**: connector kanban dan daftar webhook.
+
+![Koneksi dan webhook](assets/screenshots/connect.png)
+
 <details>
-<summary>Pratinjau, dialog posting, riwayat, template, mobile</summary>
+<summary>Pratinjau, dialog posting, kirim ke webhook, riwayat, template, mobile</summary>
 
 **Pratinjau**: isi komentar persis seperti yang akan diposting.
 
@@ -43,6 +57,14 @@ Perbedaan mode hanya ada di `.env`.
 **Post ke Basecamp**: konfirmasi kartu tujuan dan centang subtask.
 
 ![Dialog posting](assets/screenshots/post-dialog.png)
+
+**Editor dengan tujuan webhook**
+
+![Editor dengan webhook](assets/screenshots/editor-webhook.png)
+
+**Kirim ke Discord**
+
+![Dialog kirim webhook](assets/screenshots/send-dialog.png)
 
 **Riwayat**
 
@@ -60,16 +82,33 @@ Perbedaan mode hanya ada di `.env`.
 
 ## Fitur
 
+- **Sumber bahan**: kartu kanban (deskripsi, step, komentar) atau tulisan sendiri. Tanpa kanban, laporan tetap bisa dibuat penuh.
 - **Connect Basecamp** (OAuth Launchpad). Token dienkripsi AES-256-GCM dan diperbarui otomatis sebelum kedaluwarsa. Disconnect menghapus token.
 - **Pilih kartu** dengan menelusuri project → card table → kolom → kartu, atau menempel URL kartu. Kartu sumber dan tujuan boleh berbeda.
-- **Draf dari template**: AI (Anthropic/OpenAI, dipilih lewat `.env`) menyusun poin per bagian dari deskripsi, step, komentar, dan catatanmu. Tanpa API key, draf disusun dari step dan komentar.
-- **Penyamaran kredensial**: teks mirip password/token di kartu dan komentar disamarkan sebelum masuk draf maupun prompt AI.
-- **Editor**: centang bagian/poin/gambar (yang tidak dicentang tidak ikut terposting), edit teks, ubah urutan, tempel gambar ke poin. Tersimpan otomatis.
+- **Draf dari template**: AI (Anthropic/OpenAI, dipilih lewat `.env`) menyusun poin per bagian. Tanpa API key, draf disusun dari step kartu dan catatanmu.
+- **Penyamaran kredensial**: teks mirip password/token disamarkan sebelum masuk draf maupun prompt AI.
+- **Editor**: centang bagian/poin/gambar (yang tidak dicentang tidak ikut), edit teks, ubah urutan, tempel gambar ke poin. Tersimpan otomatis.
 - **Gambar**: upload PNG/JPG (maks. 10 MB) atau screenshot dari daftar URL (default 1440×900). Urutkan dengan drag; nomor "Gambar N" menyesuaikan otomatis.
-- **Post ke Basecamp**: gambar diupload sebagai lampiran (`attachable_sgid` → `<bc-attachment>`), posisinya sama dengan draf. Opsional mencentang subtask. Posting ulang menawarkan *Update komentar lama* atau *Posting baru*, jadi tidak ada posting dobel.
-- **Cadangan**: unduh PDF, salin HTML (rich text, gambar ikut), salin Markdown, atau tampilan cetak.
-- **Riwayat** laporan dengan status dan tautan komentar. Diff draf awal vs versi terposting disimpan untuk analisis pola edit.
+- **Tujuan posting**, dipilih per laporan:
+  - *Kartu kanban*: gambar diupload sebagai lampiran (`<bc-attachment>` di Basecamp), opsional centang subtask. Posting ulang menawarkan *Update komentar lama* atau *Posting baru*.
+  - *Webhook*: lihat tabel di bawah.
+  - *Salin saja*: tanpa posting.
+- **Format salin**: WhatsApp (`*tebal*`, bullet `•`), Slack (mrkdwn), Teams (rich text + teks biasa), HTML dengan gambar, Markdown, PDF, dan tampilan cetak.
+- **Riwayat** laporan dengan status dan tautan. Diff draf awal vs versi terkirim disimpan untuk analisis pola edit.
 - UI **Indonesia / English**, navigasi keyboard, kontras WCAG AA.
+
+### Webhook
+
+| Jenis | Cara mendapatkan URL | Gambar |
+| --- | --- | --- |
+| Discord | Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL | ikut sebagai file (maks. 10 per pesan, 10 MB) |
+| Slack | api.slack.com/apps → Incoming Webhooks → Add New Webhook | ditulis sebagai rujukan `[Gambar N: …]` |
+| Microsoft Teams | channel → ••• → Workflows → "Send webhook alerts to a channel" | ditulis sebagai rujukan |
+| JSON (n8n/Zapier/Make) | URL webhook dari tool otomasimu | base64 di payload (total maks. 20 MB) |
+
+Payload JSON berisi `report`, `formats.markdown`, `formats.html`, `formats.whatsapp`, `formats.slack`, `body`, dan `images[]`. Bila secret diisi, header `x-daily-report-signature: sha256=<hmac>` bisa dipakai untuk memverifikasi pengirim.
+
+URL webhook disimpan terenkripsi dan tidak pernah dikirim balik ke browser. Webhook tidak bisa mengedit pesan lama, jadi kirim ulang selalu menjadi pesan baru. Di mode cloud, webhook hanya boleh mengarah ke alamat publik.
 
 ## Mulai cepat (mode lokal)
 
@@ -167,17 +206,19 @@ Next.js (halaman + app/api)
   ├─► Job queue     lokal / QStash          src/lib/jobs
   │        └─► Worker Python Playwright     worker/main.py
   ├─► Basecamp API  OAuth per pengguna      src/lib/connectors/basecamp.ts
+  ├─► Webhook       Discord/Slack/Teams/JSON src/lib/webhooks.ts
   └─► AI API        Anthropic / OpenAI      src/lib/ai.ts
 ```
 
 ```
 src/
   app/(app)/          halaman: beranda, laporan baru, editor, riwayat, template, koneksi, login
-  app/api/            route API (connectors, reports, templates, jobs, files, locale)
+  app/api/            route API (connectors, destinations, reports, templates, jobs, files, locale)
   app/print/[id]/     tampilan cetak
-  components/         shell, card picker, ikon
+  components/         shell, pemilih kartu, pemilih tujuan, ikon
   lib/connectors/     antarmuka Connector + implementasi Basecamp
-  lib/report/         format netral laporan, renderer (HTML Basecamp, Markdown, PDF), draf, diff
+  lib/report/         format netral laporan, renderer (HTML Basecamp, Markdown, chat, PDF), draf, diff, tujuan
+  lib/webhooks.ts     pengirim Discord, Slack, Teams, JSON
   lib/repo/           akses database per tabel
 worker/               worker screenshot + PDF
 db/migrations/        skema SQL (tanpa stored procedure, trigger, atau foreign key)
@@ -185,7 +226,7 @@ db/migrations/        skema SQL (tanpa stored procedure, trigger, atau foreign k
 
 ### Menambah connector
 
-Implementasikan antarmuka `Connector` di `src/lib/connectors/types.ts` (OAuth, `listBoards`, `listColumns`, `listCards`, `getCard`, `parseCardUrl`, `renderReport`, `postReport`, dan opsional `uploadImage`, `updateReport`, `setChecklist`), lalu daftarkan di `src/lib/connectors/index.ts`. Halaman dan API tidak perlu diubah.
+Implementasikan antarmuka `Connector` di `src/lib/connectors/types.ts` (OAuth, `listBoards`, `listColumns`, `listCards`, `getCard`, `parseCardUrl`, `renderReport`, `postReport`, dan opsional `uploadImage`, `updateReport`, `setChecklist`, `supportsLogin`), lalu daftarkan di `src/lib/connectors/index.ts`. Halaman beranda, koneksi, login, pemilih kartu, dan tombol posting membaca daftar connector dan kemampuannya sendiri, jadi tidak perlu diubah. Contoh: connector tanpa `setChecklist` otomatis tidak menampilkan opsi centang subtask.
 
 ## Keamanan
 

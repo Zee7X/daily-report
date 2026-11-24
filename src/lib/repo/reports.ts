@@ -257,6 +257,10 @@ export async function setTarget(
   )
 }
 
+export async function clearTarget(reportId: string) {
+  await exec('DELETE FROM report_targets WHERE report_id = ?', [reportId])
+}
+
 export async function markPosted(
   targetId: string,
   p: { commentId: string; url: string | null; jobId: string },

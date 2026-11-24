@@ -1,7 +1,7 @@
 import { Coord } from '@/components/ui'
 import { aiEnabled } from '@/lib/ai'
 import { getDict } from '@/lib/i18n/server'
-import { getConnection } from '@/lib/repo/connections'
+import { targetOptions } from '@/lib/report/targets'
 import { listTemplates } from '@/lib/repo/templates'
 import { requireUser } from '@/lib/session'
 import { NewReportForm } from './form'
@@ -11,7 +11,7 @@ export const metadata = { title: 'Laporan baru' }
 export default async function NewReportPage() {
   const user = await requireUser()
   const { t, locale } = await getDict()
-  const [templates, conn] = await Promise.all([listTemplates(user.id), getConnection(user.id, 'basecamp')])
+  const [templates, options] = await Promise.all([listTemplates(user.id), targetOptions(user)])
   const today = new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'id-ID', { day: 'numeric', month: 'short' }).format(
     new Date(),
   )
@@ -26,7 +26,8 @@ export default async function NewReportPage() {
       </section>
       <NewReportForm
         templates={templates.map((tpl) => ({ id: tpl.id, name: tpl.name }))}
-        connected={Boolean(conn)}
+        providers={options.providers}
+        destinations={options.destinations}
         aiOn={aiEnabled()}
         today={today}
       />

@@ -607,6 +607,10 @@ input[type='radio'] {
   background: var(--ink);
   color: var(--paper);
 }
+.seg button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* ── status & feedback ──────────────────────────────────────────────── */
 
@@ -690,6 +694,25 @@ input[type='radio'] {
 }
 .toast.bad {
   background: var(--bad);
+}
+
+/* dua kolom di dalam satu sel, dipisah garis tipis */
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--line);
+  margin: 4px calc(var(--pad) * -1) calc(var(--pad) * -1);
+}
+.split > * {
+  padding: var(--pad);
+  min-width: 0;
+}
+.split > * + * {
+  border-left: 1px solid var(--line);
+}
+@media (max-width: 760px) {
+  .split { grid-template-columns: 1fr; }
+  .split > * + * { border-left: 0; border-top: 1px solid var(--line); }
 }
 
 /* ── lists ──────────────────────────────────────────────────────────── */
