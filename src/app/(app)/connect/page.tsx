@@ -101,7 +101,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
           {t.integrations.aiTitle}
         </h2>
         <p className="muted">{t.integrations.aiText}</p>
-        <AiPanel initial={ai ? toPublicAi(ai) : null} builtIn={envAiEnabled()} presets={MODEL_PRESETS} />
+        <AiPanel initial={ai ? toPublicAi(ai) : null} builtIn={envAiEnabled()} presets={MODEL_PRESETS} cloud={env.isCloud} />
       </section>
     </div>
   )
