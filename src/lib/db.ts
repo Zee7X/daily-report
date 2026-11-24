@@ -39,8 +39,28 @@ export function pool(): Pool {
 type Param = string | number | boolean | Date | null | Buffer
 type Executor = Pool | PoolConnection
 
+const CONNECTION_CODES = new Set(['ECONNRESET', 'PROTOCOL_CONNECTION_LOST', 'EPIPE', 'ETIMEDOUT', 'ECONNREFUSED'])
+
+// SQL errors (ER_*) carry their own code and never match; only dead-socket errors do.
+export function isConnectionError(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | null
+  return Boolean(e && ((e.code && CONNECTION_CODES.has(e.code)) || /connection is in closed state/i.test(e.message ?? '')))
+}
+
+// Vercel membekukan instance, gateway TiDB memutus koneksi pool, dan koneksi mati baru ketahuan saat dipakai.
+// mysql2 membuang koneksi itu setelah gagal, jadi satu kali ulang mengambil koneksi baru. Hanya untuk pool:
+// koneksi tx tidak boleh diulang karena transaksinya sudah hilang bersama koneksinya.
+async function run<R>(ex: Executor, fn: () => Promise<R>): Promise<R> {
+  try {
+    return await fn()
+  } catch (err) {
+    if ('release' in ex || !isConnectionError(err)) throw err
+    return fn()
+  }
+}
+
 export async function query<T = RowDataPacket>(sql: string, params: Param[] = [], ex: Executor = pool()) {
-  const [rows] = await ex.query<RowDataPacket[]>(sql, params)
+  const [rows] = await run(ex, () => ex.query<RowDataPacket[]>(sql, params))
   return rows as unknown as T[]
 }
 
@@ -50,7 +70,7 @@ export async function one<T = RowDataPacket>(sql: string, params: Param[] = [], 
 }
 
 export async function exec(sql: string, params: Param[] = [], ex: Executor = pool()) {
-  const [res] = await ex.query<ResultSetHeader>(sql, params)
+  const [res] = await run(ex, () => ex.query<ResultSetHeader>(sql, params))
   return res
 }
 

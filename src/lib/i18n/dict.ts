@@ -361,6 +361,7 @@ const id = {
     private_url: 'Mode cloud hanya bisa mengambil screenshot dari URL publik.',
     already_posted: 'Laporan ini sudah pernah diposting.',
     setupHint: 'Periksa .env (DATABASE_URL, ENCRYPTION_KEY), pastikan database berjalan, lalu jalankan',
+    waking: 'Server sedang bangun, coba lagi.',
   },
 }
 
@@ -724,6 +725,7 @@ const en: Dict = {
     private_url: 'Cloud mode can only screenshot public URLs.',
     already_posted: 'This report was posted before.',
     setupHint: 'Check .env (DATABASE_URL, ENCRYPTION_KEY), make sure the database is running, then run',
+    waking: 'Server is waking up, please retry.',
   },
 }
 
