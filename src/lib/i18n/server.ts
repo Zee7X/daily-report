@@ -6,7 +6,7 @@ export const LOCALE_COOKIE = 'rt_locale'
 
 export async function getLocale(): Promise<Locale> {
   const v = (await cookies()).get(LOCALE_COOKIE)?.value
-  return v === 'en' ? 'en' : 'id'
+  return v === 'id' ? 'id' : 'en'
 }
 
 export async function getDict() {

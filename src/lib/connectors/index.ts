@@ -25,13 +25,13 @@ export function listConnectors(): Connector[] {
 
 export function getConnector(provider: string): Connector {
   const c = registry[provider]
-  if (!c) throw new HttpError(404, 'unknown_provider', `Connector "${provider}" tidak dikenal`)
+  if (!c) throw new HttpError(404, 'unknown_provider', 'unknownProvider', undefined, { provider })
   return c
 }
 
 export async function requireConnection(userId: string, provider: string) {
   const connector = getConnector(provider)
   const conn = await getConnection(userId, provider)
-  if (!conn) throw new HttpError(409, 'not_connected', `Akun ${connector.label} belum dihubungkan`)
+  if (!conn) throw new HttpError(409, 'not_connected', 'notConnected', undefined, { label: connector.label })
   return { connector, conn }
 }

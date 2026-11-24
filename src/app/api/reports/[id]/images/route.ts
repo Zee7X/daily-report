@@ -64,10 +64,10 @@ export const POST = api<Ctx>(async (req, { params, user }) => {
 
   const prepared: { name: string; mime: 'image/png' | 'image/jpeg'; data: Buffer }[] = []
   for (const f of files) {
-    if (f.size > MAX_BYTES) throw new HttpError(413, 'file_too_large', `${f.name} > 10 MB`)
+    if (f.size > MAX_BYTES) throw new HttpError(413, 'file_too_large', 'fileTooLarge', undefined, { name: f.name })
     const data = Buffer.from(await f.arrayBuffer())
     const mime = sniff(data)
-    if (!mime) throw new HttpError(415, 'unsupported_type', `${f.name}: hanya PNG/JPG`)
+    if (!mime) throw new HttpError(415, 'unsupported_type', 'unsupportedType', undefined, { name: f.name })
     prepared.push({ name: f.name, mime, data })
   }
 

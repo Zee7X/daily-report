@@ -9,7 +9,9 @@ import { getDict } from '@/lib/i18n/server'
 import { currentUser } from '@/lib/session'
 import { LoginForm } from './form'
 
-export const metadata = { title: 'Login' }
+export async function generateMetadata() {
+  return { title: (await getDict()).t.titles.login }
+}
 
 // FR-1: login email + password atau connector yang mendukung login ("Login with Basecamp").
 // Bila AUTH_URL diisi, halaman ini hanya tampil di domain login (proxy mengarahkan /login ke sana).

@@ -3,7 +3,7 @@
 import { createContext, useContext } from 'react'
 import { dictionaries, type Dict, type Locale } from './dict'
 
-const Ctx = createContext<{ locale: Locale; t: Dict }>({ locale: 'id', t: dictionaries.id })
+const Ctx = createContext<{ locale: Locale; t: Dict }>({ locale: 'en', t: dictionaries.en })
 
 export function I18nProvider({ locale, children }: { locale: Locale; children: React.ReactNode }) {
   return <Ctx.Provider value={{ locale, t: dictionaries[locale] }}>{children}</Ctx.Provider>

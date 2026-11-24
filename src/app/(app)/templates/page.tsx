@@ -4,12 +4,14 @@ import { listTemplates } from '@/lib/repo/templates'
 import { requireUser } from '@/lib/session'
 import { TemplatesEditor } from './editor'
 
-export const metadata = { title: 'Template' }
+export async function generateMetadata() {
+  return { title: (await getDict()).t.titles.templates }
+}
 
 export default async function TemplatesPage() {
   const user = await requireUser()
   const { t } = await getDict()
-  const templates = await listTemplates(user.id)
+  const templates = await listTemplates(user.id, user.locale)
   return (
     <div className="grid">
       <div className="blob low" aria-hidden />

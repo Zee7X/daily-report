@@ -1,8 +1,9 @@
 import 'server-only'
 import { env } from '../env'
-import type { Connection } from '../repo/connections'
+import { isTokenAuth, type Connection } from '../repo/connections'
 import { renderMarkdown } from '../report/render'
 import { createClient, ref } from './http'
+import { probe } from './token'
 import type { Board, Card, CardDetail, Column, Connector } from './types'
 
 // Trello: board → list → card. Step = item checklist. Gambar diunggah sebagai lampiran kartu.
@@ -12,10 +13,13 @@ const key = () => process.env.TRELLO_API_KEY ?? ''
 const API = () => (process.env.TRELLO_API_BASE || 'https://api.trello.com').replace(/\/$/, '')
 const AUTH = () => (process.env.TRELLO_AUTH_BASE || 'https://trello.com').replace(/\/$/, '')
 
+// Koneksi token pribadi membawa kunci API-nya sendiri; koneksi OAuth memakai TRELLO_API_KEY server.
+const authorization = (apiKey: string, token: string) => `OAuth oauth_consumer_key="${apiKey}", oauth_token="${token}"`
+
 const client = createClient({
   label: 'Trello',
   rate: { limit: 80, windowMs: 10_000 }, // batas Trello: 100 request / 10 detik per token
-  authHeaders: (conn) => ({ Authorization: `OAuth oauth_consumer_key="${key()}", oauth_token="${conn.accessToken}"` }),
+  authHeaders: (conn) => ({ Authorization: authorization((isTokenAuth(conn) && conn.meta.apiKey) || key(), conn.accessToken) }),
 })
 
 const url = (path: string, q: Record<string, string> = {}) => `${API()}/1${path}${Object.keys(q).length ? `?${new URLSearchParams(q)}` : ''}`
@@ -37,14 +41,40 @@ export const trello: Connector = {
     url: 'https://trello.com/power-ups/admin',
     env: ['TRELLO_API_KEY'],
     steps: [
-      'Buat Power-Up baru, buka tab API Key, lalu Generate a new API key',
-      'Tambahkan domain login (AUTH_URL atau APP_URL) ke Allowed origins',
-      'Salin API key ke TRELLO_API_KEY',
+      'Create a new Power-Up, open the API Key tab, then Generate a new API key',
+      'Add the login domain (AUTH_URL or APP_URL) to Allowed origins',
+      'Copy the API key into TRELLO_API_KEY',
     ],
   },
 
   isConfigured: () => Boolean(key()),
   redirectUri: () => `${env.authUrl}/oauth/trello`,
+
+  tokenAuth: {
+    help: 'https://trello.com/power-ups/admin',
+    fields: [
+      { name: 'apiKey', label: 'API key', type: 'text' },
+      { name: 'token', label: 'Token', type: 'password' },
+    ],
+    async verify({ apiKey, token }) {
+      const me = await probe<{ id: string; fullName: string; username: string; email?: string | null }>(
+        'Trello',
+        url('/members/me', { fields: 'fullName,username,email' }),
+        { headers: { Authorization: authorization(apiKey, token) } },
+      )
+      return {
+        connection: {
+          accountId: me.id,
+          accountName: me.fullName || me.username,
+          accessToken: token,
+          refreshToken: null,
+          expiresAt: null,
+          meta: { auth: 'token', apiKey, email: me.email ?? undefined, accounts: [{ id: me.id, name: me.username }] },
+        },
+        identity: { email: me.email || `${me.username}@users.trello`, name: me.fullName || me.username, verified: false },
+      }
+    },
+  },
 
   authorizeUrl(state) {
     const ret = new URL(this.redirectUri())
@@ -62,7 +92,7 @@ export const trello: Connector = {
   },
 
   async handleCallback(token) {
-    const temp = { id: 'tmp', accessToken: token } as Connection
+    const temp = { id: 'tmp', accessToken: token, meta: {} } as unknown as Connection
     const me = await client.json<{ id: string; fullName: string; username: string; email?: string | null }>(
       temp,
       url('/members/me', { fields: 'fullName,username,email' }),

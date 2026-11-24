@@ -2,12 +2,13 @@ import type { Metadata, Viewport } from 'next'
 import { GeistMono } from 'geist/font/mono'
 import { GeistSans } from 'geist/font/sans'
 import { I18nProvider } from '@/lib/i18n/client'
+import { dictionaries } from '@/lib/i18n/dict'
 import { getLocale } from '@/lib/i18n/server'
 import './globals.css'
 
-export const metadata: Metadata = {
-  title: { default: 'Daily Report', template: '%s · Daily Report' },
-  description: 'Susun laporan progres dari kanban, pilih poin dan gambar, lalu posting dalam satu klik.',
+export async function generateMetadata(): Promise<Metadata> {
+  const t = dictionaries[await getLocale()]
+  return { title: { default: 'Daily Report', template: '%s · Daily Report' }, description: t.meta.description }
 }
 
 export const viewport: Viewport = { themeColor: '#ffffff' }

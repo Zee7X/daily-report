@@ -4,7 +4,9 @@ import { getDict } from '@/lib/i18n/server'
 import { listReports } from '@/lib/repo/reports'
 import { requireUser } from '@/lib/session'
 
-export const metadata = { title: 'Riwayat' }
+export async function generateMetadata() {
+  return { title: (await getDict()).t.titles.history }
+}
 
 // FR-17: riwayat laporan — daftar, status, tautan hasil posting
 export default async function HistoryPage() {

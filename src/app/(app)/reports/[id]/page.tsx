@@ -2,13 +2,16 @@ import { notFound } from 'next/navigation'
 import { browserEnabled } from '@/lib/browser'
 import { env } from '@/lib/env'
 import { HttpError } from '@/lib/http'
+import { getDict } from '@/lib/i18n/server'
 import { loadReportView } from '@/lib/report/service'
 import { targetOptions } from '@/lib/report/targets'
 import { getTemplate } from '@/lib/repo/templates'
 import { requireUser } from '@/lib/session'
 import { Editor, type EditorData } from './editor'
 
-export const metadata = { title: 'Draf' }
+export async function generateMetadata() {
+  return { title: (await getDict()).t.titles.draft }
+}
 
 export default async function ReportPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser()

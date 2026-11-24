@@ -61,7 +61,7 @@ export async function describeTarget(user: User, target: ReportTarget | null): P
   }
 }
 
-export type ProviderOption = { id: string; label: string; connected: boolean; configured: boolean }
+export type ProviderOption = { id: string; label: string; connected: boolean; configured: boolean; tokenAuth: boolean }
 
 /** Daftar connector beserta status, dan webhook milik pengguna, untuk pemilih sumber/tujuan. */
 export async function targetOptions(user: User): Promise<{ providers: ProviderOption[]; destinations: PublicDestination[] }> {
@@ -70,6 +70,7 @@ export async function targetOptions(user: User): Promise<{ providers: ProviderOp
       id: c.id,
       label: c.label,
       configured: c.isConfigured(),
+      tokenAuth: Boolean(c.tokenAuth),
       connected: Boolean(await getConnection(user.id, c.id)),
     })),
   )

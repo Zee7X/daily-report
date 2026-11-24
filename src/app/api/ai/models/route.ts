@@ -9,7 +9,7 @@ import { getAiSetting } from '@/lib/repo/ai-settings'
 //   { baseUrl, apiKey }  → sebelum disimpan
 //   {}                   → memakai endpoint yang sudah tersimpan
 export const POST = api(async (req, { user }) => {
-  await consume('ai_models', user.id, 30, 3600_000, 'Terlalu sering memuat daftar model. Coba lagi nanti.')
+  await consume('ai_models', user.id, 30, 3600_000, 'rateAiModels')
   const input = z.object({ baseUrl: z.string().trim().max(500).optional(), apiKey: z.string().trim().max(500).optional() }).parse(await req.json())
   let baseUrl: string
   let apiKey: string

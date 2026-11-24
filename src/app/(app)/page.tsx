@@ -17,11 +17,11 @@ export default async function Home() {
     health(),
     targetOptions(user),
     listReports(user.id, 4),
-    listTemplates(user.id),
+    listTemplates(user.id, user.locale),
     aiFor(user.id),
   ])
   const connected = options.providers.filter((p) => p.connected)
-  const connectable = options.providers.filter((p) => p.configured && !p.connected)
+  const connectable = options.providers.filter((p) => (p.configured || p.tokenAuth) && !p.connected)
   const configuredConnectors = h.connectors.filter((c) => c.configured)
   const c = t.home.checks
 
@@ -83,7 +83,7 @@ export default async function Home() {
         )}
         <div className="row push">
           {connectable.map((p) => (
-            <a key={p.id} className="btn primary" href={`/api/connectors/${p.id}/authorize`}>
+            <a key={p.id} className="btn primary" href={p.configured ? `/api/connectors/${p.id}/authorize` : '/connect'}>
               {fmt(t.connect.connect, { tool: p.label })}
             </a>
           ))}

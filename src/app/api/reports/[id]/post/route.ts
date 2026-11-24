@@ -21,7 +21,7 @@ export const POST = api<{ params: Promise<{ id: string }> }>(async (req, { param
   const report = await requireReport(user, id)
   const input = Input.parse(await req.json().catch(() => ({})))
   const target = await getTarget(report.id)
-  if (!target) throw new HttpError(409, 'no_target', 'Tujuan posting belum dipilih')
+  if (!target) throw new HttpError(409, 'no_target', 'noTarget')
 
   // Klik ganda / job yang masih berjalan: kembalikan job yang sama, jangan posting dobel.
   const running = await activeJob(report.id, 'post')
@@ -29,7 +29,7 @@ export const POST = api<{ params: Promise<{ id: string }> }>(async (req, { param
 
   // Sudah pernah diposting: pengguna wajib memilih update atau posting baru (FR-11).
   if (target.postedCommentId && !input.mode) {
-    throw new HttpError(409, 'already_posted', 'Laporan ini sudah pernah diposting', {
+    throw new HttpError(409, 'already_posted', 'alreadyPosted', {
       postedUrl: target.postedUrl,
       postedAt: target.postedAt,
     })

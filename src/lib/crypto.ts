@@ -6,7 +6,7 @@ import { env } from './env'
 
 function masterKey(): Buffer {
   const raw = env.encryptionKey
-  if (!raw) throw new Error('ENCRYPTION_KEY belum diisi. Jalankan `npm run gen:key` lalu simpan di .env')
+  if (!raw) throw new Error('ENCRYPTION_KEY is not set. Run `npm run gen:key` and save it in .env')
   const key = Buffer.from(raw, 'base64')
   if (key.length !== 32) throw new Error('ENCRYPTION_KEY harus 32 byte dalam base64')
   return key
@@ -26,7 +26,7 @@ export function encrypt(plain: string): string {
 
 export function decrypt(payload: string): string {
   const [v, iv, tag, ct] = payload.split('.')
-  if (v !== 'v1' || !iv || !tag || !ct) throw new Error('Format ciphertext tidak dikenal')
+  if (v !== 'v1' || !iv || !tag || !ct) throw new Error('Unknown ciphertext format')
   const decipher = createDecipheriv('aes-256-gcm', subKey('token-encryption'), Buffer.from(iv, 'base64url'))
   decipher.setAuthTag(Buffer.from(tag, 'base64url'))
   return Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8')

@@ -1,8 +1,9 @@
 import 'server-only'
 import { env } from '../env'
-import type { Connection } from '../repo/connections'
+import { isTokenAuth, type Connection } from '../repo/connections'
 import { renderMarkdown } from '../report/render'
 import { createClient, oauthToken, ref } from './http'
+import { probe } from './token'
 import type { Board, Card, CardDetail, Column, Connector } from './types'
 
 // ClickUp: list → status → task. Step = item checklist. Gambar diunggah sebagai lampiran task.
@@ -14,7 +15,12 @@ const WEB = () => (process.env.CLICKUP_AUTH_BASE || 'https://app.clickup.com').r
 
 const redirectUri = () => `${env.authUrl}/api/connectors/clickup/callback`
 // ClickUp: 100 request/menit per token
-const client = createClient({ label: 'ClickUp', rate: { limit: 90, windowMs: 60_000 } })
+// Token pribadi (pk_...) dikirim apa adanya, tanpa awalan Bearer.
+const client = createClient({
+  label: 'ClickUp',
+  rate: { limit: 90, windowMs: 60_000 },
+  authHeaders: (conn) => ({ Authorization: isTokenAuth(conn) ? conn.accessToken : `Bearer ${conn.accessToken}` }),
+})
 
 type CList = { id: string; name: string }
 type CTask = {
@@ -38,11 +44,32 @@ export const clickup: Connector = {
   setup: {
     url: 'https://app.clickup.com/settings/apps',
     env: ['CLICKUP_CLIENT_ID', 'CLICKUP_CLIENT_SECRET'],
-    steps: ['Apps → Create new app', 'Isi Redirect URL dengan domain dari Redirect URI di bawah', 'Salin Client ID & Secret ke environment'],
+    steps: ['Apps → Create new app', 'Set the Redirect URL to the domain from the Redirect URI below', 'Copy the Client ID & Secret into the environment'],
   },
 
   isConfigured: () => Boolean(ID() && SECRET()),
   redirectUri,
+
+  tokenAuth: {
+    help: 'https://app.clickup.com/settings/apps',
+    fields: [{ name: 'token', label: 'Personal token (pk_...)', type: 'password' }],
+    async verify({ token }) {
+      const headers = { Authorization: token }
+      const me = await probe<{ user: { id: number; username: string; email: string } }>('ClickUp', `${API()}/user`, { headers })
+      const teams = await probe<{ teams: { id: string; name: string }[] }>('ClickUp', `${API()}/team`, { headers })
+      return {
+        connection: {
+          accountId: String(me.user.id),
+          accountName: me.user.username,
+          accessToken: token,
+          refreshToken: null,
+          expiresAt: null,
+          meta: { auth: 'token', email: me.user.email, accounts: teams.teams.map((x) => ({ id: x.id, name: x.name })) },
+        },
+        identity: { email: me.user.email, name: me.user.username, verified: false },
+      }
+    },
+  },
 
   authorizeUrl(state) {
     return `${WEB()}/api?${new URLSearchParams({ client_id: ID(), redirect_uri: redirectUri(), state })}`

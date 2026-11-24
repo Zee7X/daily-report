@@ -90,7 +90,7 @@ export function createClient(opts: ClientOptions) {
       }
       if (!res.ok && !init.okStatus?.includes(res.status)) {
         const text = await res.text().catch(() => '')
-        throw new Error(`${opts.label} ${init.method ?? 'GET'} gagal (${res.status}): ${text.slice(0, 200)}`)
+        throw new Error(`${opts.label} ${init.method ?? 'GET'} failed (${res.status}): ${text.slice(0, 200)}`)
       }
       return res
     }
@@ -159,7 +159,7 @@ export const ref = {
   make: (...parts: (string | number)[]) => parts.map((p) => encodeURIComponent(String(p)).replace(/~/g, '%7E')).join('~'),
   parse: (id: string, n: number, label: string) => {
     const parts = id.split('~').map(decodeURIComponent)
-    if (parts.length !== n || parts.some((p) => !p)) throw new Error(`ID ${label} tidak valid`)
+    if (parts.length !== n || parts.some((p) => !p)) throw new Error(`Invalid ${label} ID`)
     return parts
   },
 }

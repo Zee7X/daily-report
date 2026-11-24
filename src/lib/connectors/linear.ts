@@ -1,8 +1,10 @@
 import 'server-only'
 import { env } from '../env'
-import type { Connection } from '../repo/connections'
+import { HttpError } from '../http'
+import { isTokenAuth, type Connection } from '../repo/connections'
 import { renderMarkdown } from '../report/render'
 import { createClient, expiresIn, oauthToken } from './http'
+import { probe } from './token'
 import type { Board, Card, CardDetail, Column, Connector } from './types'
 
 // Linear: team → workflow state → issue. Step = sub-issue (ditandai selesai = pindah ke state "completed").
@@ -24,14 +26,23 @@ async function refresh(conn: Connection) {
   return { accessToken: String(t.access_token), refreshToken: t.refresh_token ? String(t.refresh_token) : conn.refreshToken, expiresAt: expiresIn(t.expires_in) }
 }
 
-const client = createClient({ label: 'Linear', rate: { limit: 30, windowMs: 10_000 }, refresh })
+// API key pribadi dikirim apa adanya; hanya token OAuth yang memakai Bearer.
+const client = createClient({
+  label: 'Linear',
+  rate: { limit: 30, windowMs: 10_000 },
+  refresh,
+  authHeaders: (conn) => ({ Authorization: isTokenAuth(conn) ? conn.accessToken : `Bearer ${conn.accessToken}` }),
+})
+
+type Viewer = { viewer: { id: string; name: string; email: string; organization: { id: string; name: string } } }
+const VIEWER = 'query { viewer { id name email organization { id name } } }'
 
 async function gql<T>(conn: Connection, query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const res = await client.json<{ data?: T; errors?: { message: string }[] }>(conn, `${API()}/graphql`, {
     method: 'POST',
     json: { query, variables },
   })
-  if (res.errors?.length || !res.data) throw new Error(`Linear: ${res.errors?.map((e) => e.message).join('; ') ?? 'tanpa data'}`)
+  if (res.errors?.length || !res.data) throw new Error(`Linear: ${res.errors?.map((e) => e.message).join('; ') ?? 'no data'}`)
   return res.data
 }
 
@@ -45,11 +56,37 @@ export const linear: Connector = {
   setup: {
     url: 'https://linear.app/settings/api/applications/new',
     env: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET'],
-    steps: ['Create new OAuth application', 'Isi Callback URL dengan Redirect URI di bawah', 'Salin Client ID & Client secret ke environment'],
+    steps: ['Create new OAuth application', 'Set the Callback URL to the Redirect URI below', 'Copy the Client ID & Client secret into the environment'],
   },
 
   isConfigured: () => Boolean(ID() && SECRET()),
   redirectUri,
+
+  tokenAuth: {
+    help: 'https://linear.app/settings/account/security',
+    fields: [{ name: 'token', label: 'Personal API key', type: 'password' }],
+    async verify({ token }) {
+      const res = await probe<{ data?: Viewer }>('Linear', `${API()}/graphql`, {
+        method: 'POST',
+        headers: { Authorization: token },
+        json: { query: VIEWER },
+        authFailed: (s, d) => s === 401 || s === 403 || JSON.stringify((d as { errors?: unknown })?.errors ?? '').includes('AUTHENTICATION_ERROR'),
+      })
+      const v = res.data?.viewer
+      if (!v) throw new HttpError(502, 'token_unreachable', 'tokenUnreachable', undefined, { label: 'Linear' })
+      return {
+        connection: {
+          accountId: v.id,
+          accountName: v.name,
+          accessToken: token,
+          refreshToken: null,
+          expiresAt: null,
+          meta: { auth: 'token', email: v.email, accounts: [{ id: v.organization.id, name: v.organization.name }] },
+        },
+        identity: { email: v.email, name: v.name, verified: false },
+      }
+    },
+  },
 
   authorizeUrl(state) {
     const qs = new URLSearchParams({
@@ -71,10 +108,7 @@ export const linear: Connector = {
     )
     const accessToken = String(t.access_token)
     const temp = { id: 'tmp', accessToken } as Connection
-    const d = await gql<{ viewer: { id: string; name: string; email: string; organization: { id: string; name: string } } }>(
-      temp,
-      'query { viewer { id name email organization { id name } } }',
-    )
+    const d = await gql<Viewer>(temp, VIEWER)
     return {
       connection: {
         accountId: d.viewer.id,
@@ -174,7 +208,7 @@ export const linear: Connector = {
     const headers: Record<string, string> = { 'Content-Type': file.mime, 'Cache-Control': 'public, max-age=31536000' }
     for (const h of u.headers) headers[h.key] = h.value
     const res = await fetch(u.uploadUrl, { method: 'PUT', headers, body: new Uint8Array(file.data) })
-    if (!res.ok) throw new Error(`Linear upload gagal (${res.status})`)
+    if (!res.ok) throw new Error(`Linear upload failed (${res.status})`)
     return u.assetUrl
   },
 
@@ -203,7 +237,7 @@ export const linear: Connector = {
       { id: cardId },
     )
     const doneState = d.issue.team.states.nodes.filter((s) => s.type === 'completed').sort((a, b) => a.position - b.position)[0]
-    if (!doneState) throw new Error('Tim Linear ini tidak punya state "completed"')
+    if (!doneState) throw new Error('This Linear team has no "completed" state')
     for (const id of stepIds) {
       await gql(conn, 'mutation($id: String!, $s: String!) { issueUpdate(id: $id, input: { stateId: $s }) { success } }', { id, s: doneState.id })
     }

@@ -12,10 +12,10 @@ export const POST = api<{ params: Promise<{ id: string }> }>(async (_req, { para
   if (!dest) throw new HttpError(404, 'destination_not_found')
   await limits.webhookTest(user.id)
   try {
-    await sendWebhook(dest, testReport(LABELS[user.locale]))
+    await sendWebhook(dest, testReport(user.locale, LABELS[user.locale]))
   } catch (err) {
     if (err instanceof HttpError) throw err
-    throw new HttpError(502, 'webhook_failed', err instanceof Error ? err.message : 'Webhook gagal')
+    throw new HttpError(502, 'webhook_failed', err instanceof Error ? 'webhookFailedDetail' : 'webhookFailed', undefined, { detail: err instanceof Error ? err.message : '' })
   }
   return NextResponse.json({ ok: true })
 })

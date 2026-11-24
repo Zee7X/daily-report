@@ -19,7 +19,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
   }
   const nonce = req.cookies.get(OAUTH_NONCE_COOKIE)?.value ?? ''
   const sp = req.nextUrl.searchParams
-  const state = await completeOAuthState(sp.get('s') ?? '', nonce, sp.get('k') ?? '').catch(() => null)
+  let state: Awaited<ReturnType<typeof completeOAuthState>>
+  try {
+    state = await completeOAuthState(sp.get('s') ?? '', nonce, sp.get('k') ?? '')
+  } catch (err) {
+    console.error(`OAuth state ${provider} gagal diselesaikan:`, err instanceof Error ? err.message : err)
+    return go('/login?error=server_busy')
+  }
   if (!state || state.provider !== provider || !state.result || new URL(state.returnBase).host !== new URL(base).host) {
     return go('/login?error=invalid_state')
   }

@@ -8,7 +8,7 @@ const g = globalThis as unknown as { __rtPool?: Pool }
 
 export function pool(): Pool {
   if (g.__rtPool) return g.__rtPool
-  if (!env.databaseUrl) throw new Error('DATABASE_URL belum diisi')
+  if (!env.databaseUrl) throw new Error('DATABASE_URL is not set')
   const u = new URL(env.databaseUrl)
   g.__rtPool = mysql.createPool({
     host: u.hostname,

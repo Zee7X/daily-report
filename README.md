@@ -123,16 +123,18 @@ Versi online (Vercel) tidak bisa membuka `localhost` di komputermu. Untuk memaka
 
 ### Connector kanban
 
-| Tool | Board → kolom → kartu | Gambar | Subtask yang bisa dicentang | Login |
-| --- | --- | --- | --- | --- |
-| Basecamp | project/card table → kolom → kartu | lampiran `<bc-attachment>` | step kartu | ya |
-| Trello | board → list → kartu | lampiran kartu | item checklist | – |
-| Jira Cloud | project → status → issue | lampiran issue (komentar ADF) | sub-task (transisi ke Done) | – |
-| GitHub Issues | repository → Open/Closed → issue | rujukan teks (API GitHub tidak bisa upload gambar) | task list `- [ ]` di issue | ya |
-| Linear | team → workflow state → issue | gambar tampil di komentar | sub-issue (pindah ke Completed) | – |
-| ClickUp | list → status → task | lampiran task | item checklist | – |
+| Tool | Board → kolom → kartu | Gambar | Subtask yang bisa dicentang | Login | Token pribadi |
+| --- | --- | --- | --- | --- | --- |
+| Basecamp | project/card table → kolom → kartu | lampiran `<bc-attachment>` | step kartu | ya | tidak (hanya OAuth) |
+| Trello | board → list → kartu | lampiran kartu | item checklist | – | ya |
+| Jira Cloud | project → status → issue | lampiran issue (komentar ADF) | sub-task (transisi ke Done) | – | ya |
+| GitHub Issues | repository → Open/Closed → issue | rujukan teks (API GitHub tidak bisa upload gambar) | task list `- [ ]` di issue | ya | ya |
+| Linear | team → workflow state → issue | gambar tampil di komentar | sub-issue (pindah ke Completed) | – | ya |
+| ClickUp | list → status → task | lampiran task | item checklist | – | ya |
 
 Pengguna cukup klik **Connect**. Pemilik instalasi mendaftarkan aplikasi OAuth sekali per tool. Langkah, variabel environment, dan Redirect URI-nya tampil di halaman Koneksi (bagian *Cara mengaktifkan*) dan di `.env.example`.
+
+**Token pribadi (tanpa OAuth di server).** Trello, Jira Cloud, GitHub, Linear, dan ClickUp juga bisa dihubungkan dengan token yang ditempel sendiri di halaman Koneksi (*Pakai token pribadi*), jadi tidak perlu `TRELLO_API_KEY`, `JIRA_*`, `GITHUB_*`, `LINEAR_*`, atau `CLICKUP_*` terisi. Yang ditempel: Trello = API key + token; Jira = URL situs `https://nama.atlassian.net` + email + API token; GitHub = personal access token (fine-grained dengan izin Issues read/write, atau classic dengan scope `repo`); Linear = personal API key; ClickUp = token pribadi `pk_…`. Token diperiksa ke tool dulu, disimpan terenkripsi, dan tidak pernah dikirim balik ke browser (hanya 4 karakter terakhir yang tampil). Koneksi token tidak bisa dipakai untuk login (login tetap lewat OAuth dengan email terverifikasi). Basecamp tidak punya token pribadi: admin situs perlu mendaftarkan integrasi Launchpad sekali.
 
 ### Webhook
 
@@ -305,6 +307,36 @@ Peringatan merah di domain baru biasanya salah satu dari dua hal: sertifikat HTT
 Vercel tidak menjalankan browser, jadi di cloud screenshot diupload manual dan PDF dibuat lewat *Tampilan cetak → Save as PDF*. Untuk screenshot otomatis, deploy folder `worker/` (ada `Dockerfile`) ke Railway/Render/Fly dengan `WORKER_TOKEN` dan `BLOCK_PRIVATE_NETWORKS=true`, lalu isi `BROWSER_DRIVER=remote-worker`, `BROWSER_WORKER_URL`, dan `BROWSER_WORKER_TOKEN` di Vercel.
 
 Alternatif storage dan antrean untuk instalasi lain: Cloudflare R2 (`STORAGE_DRIVER=s3`) dan Upstash QStash (`QUEUE_DRIVER=qstash`).
+
+### Keep warm (opsional)
+
+Fungsi Vercel dibekukan saat tidak ada traffic, dan gateway TiDB Cloud Starter memutus koneksi yang idle sehingga cluster perlu "bangun" lagi. Akibatnya request pertama setelah lama sepi bisa lambat atau gagal. Workflow `.github/workflows/keep-warm.yml` memanggil URL kesehatan dan menjalankan `SELECT 1` ke database tiap 10 menit supaya keduanya tetap hangat. Database aplikasi lain (di cluster yang sama atau berbeda) bisa ikut ditambahkan.
+
+Isi dua secret di GitHub → *Settings → Secrets and variables → Actions → New repository secret*. Keduanya boleh dikosongkan; langkah yang secret-nya kosong dilewati.
+
+| Secret | Isi |
+| --- | --- |
+| `KEEPWARM_URLS` | URL `https`, satu per baris atau dipisah koma, mis. `https://daily-report.lumelo.my.id/api/health` |
+| `KEEPWARM_DATABASE_URLS` | satu URL per **cluster**, satu per baris, format `mysql://user:password@host:4000` (tanpa nama database; password di-URL-encode) |
+
+Untuk database, buat user khusus per cluster yang hanya perlu login dan menjalankan `SELECT 1`, bukan `root` cluster:
+
+```sql
+CREATE USER '<prefix>.keepwarm'@'%' IDENTIFIED BY '<password-panjang-acak>';
+GRANT USAGE ON *.* TO '<prefix>.keepwarm'@'%';
+```
+
+TiDB Starter tidur per cluster, bukan per database, jadi satu baris per cluster sudah cukup: database lain di cluster yang sama (mis. aplikasi lain) ikut hangat bersamaan. URL tanpa nama database sengaja dipakai karena user di atas tidak punya hak ke database mana pun, dan menyambung ke database default yang tidak boleh diakses gagal dengan `ER_DBACCESS_DENIED_ERROR`.
+
+Log run hanya menampilkan host, status, dan waktu respons (`host OK 123ms`); password di-mask. Run merah bila semua URL gagal atau ada database yang tidak bisa dihubungi. Jalankan manual lewat tab *Actions → Keep warm → Run workflow*.
+
+Catatan:
+
+- Cron GitHub bisa terlambat beberapa menit, jadi jedanya tidak persis 10 menit.
+- Workflow terjadwal di repo publik dinonaktifkan otomatis setelah 60 hari tanpa aktivitas di repo. Aktifkan lagi di tab *Actions*.
+- Vercel Cron di paket Hobby hanya jalan sekali sehari, jadi tidak dipakai.
+- Biayanya kecil: sekitar 4,3 ribu `SELECT 1` per database per bulan, jauh di bawah kuota gratis 50 juta RU/bulan.
+- Alternatif tanpa GitHub: cron-job.org yang memanggil URL kesehatan yang sama tiap 5 sampai 10 menit.
 
 ## Arsitektur
 

@@ -17,7 +17,7 @@ type Ref = { account: string; bucket: string; id: string }
 function parseRef(ref: string): Ref {
   const [account, bucket, id] = ref.split('.')
   if (!/^\d+$/.test(account ?? '') || !/^\d+$/.test(bucket ?? '') || !/^\d+$/.test(id ?? '')) {
-    throw new Error(`ID Basecamp tidak valid: ${ref}`)
+    throw new Error(`Invalid Basecamp ID: ${ref}`)
   }
   return { account, bucket, id }
 }
@@ -97,7 +97,7 @@ type ReqInit = { method?: string; body?: unknown; raw?: { data: Buffer; contentT
 async function request(conn: Connection, account: string, path: string, init: ReqInit = {}): Promise<Response> {
   await ensureFresh(conn)
   const url = path.startsWith('http') ? path : `${env.basecamp.apiBase}/${account}${path}`
-  if (!url.startsWith(env.basecamp.apiBase + '/')) throw new Error('URL Basecamp tidak dikenal')
+  if (!url.startsWith(env.basecamp.apiBase + '/')) throw new Error('Unknown Basecamp URL')
   let refreshed = false
   for (let attempt = 0; ; attempt++) {
     await throttle(`${conn.id}:${account}`)
@@ -128,7 +128,7 @@ async function request(conn: Connection, account: string, path: string, init: Re
     }
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new Error(`Basecamp ${init.method ?? 'GET'} ${path} gagal (${res.status}): ${text.slice(0, 200)}`)
+      throw new Error(`Basecamp ${init.method ?? 'GET'} ${path} failed (${res.status}): ${text.slice(0, 200)}`)
     }
     return res
   }
@@ -209,7 +209,7 @@ export const basecamp: Connector = {
   setup: {
     url: 'https://launchpad.37signals.com/integrations',
     env: ['BASECAMP_CLIENT_ID', 'BASECAMP_CLIENT_SECRET', 'BASECAMP_USER_AGENT'],
-    steps: ['Register another application', 'Isi Redirect URI di bawah', 'Salin Client ID & Secret ke environment'],
+    steps: ['Register another application', 'Fill in the Redirect URI below', 'Copy the Client ID & Secret into the environment'],
   },
 
   isConfigured() {
@@ -234,7 +234,7 @@ export const basecamp: Connector = {
     const t = await tokenRequest({ type: 'web_server', code })
     const info = await authorizationInfo(t.access_token)
     const bc = info.accounts.filter((a) => a.product === 'bc3' || a.href?.startsWith(env.basecamp.apiBase))
-    if (!bc.length) throw new Error('Akun ini tidak memiliki akses Basecamp (bc3).')
+    if (!bc.length) throw new Error('This account has no Basecamp (bc3) access.')
     const name = [info.identity.first_name, info.identity.last_name].filter(Boolean).join(' ')
     const connection: ConnectionInput = {
       accountId: String(info.identity.id),

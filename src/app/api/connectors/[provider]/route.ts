@@ -14,6 +14,7 @@ export const GET = api<Ctx>(async (_req, { params, user }) => {
     provider,
     label: connector.label,
     configured: connector.isConfigured(),
+    tokenAuth: Boolean(connector.tokenAuth),
     connected: Boolean(conn),
     accountName: conn?.accountName ?? null,
     email: conn?.meta.email ?? null,

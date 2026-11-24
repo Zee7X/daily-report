@@ -58,8 +58,8 @@ export async function record(bucket: string, key: string, times = 1) {
 }
 
 /** Hitung lalu catat; lempar 429 bila batas sudah tercapai. */
-export async function consume(bucket: string, key: string, limit: number, windowMs: number, message: string, times = 1) {
-  if ((await count(bucket, key, windowMs)) + times > limit) throw new HttpError(429, 'rate_limited', message)
+export async function consume(bucket: string, key: string, limit: number, windowMs: number, message: string, times = 1, vars?: Record<string, string | number>) {
+  if ((await count(bucket, key, windowMs)) + times > limit) throw new HttpError(429, 'rate_limited', message, undefined, vars)
   await record(bucket, key, times)
 }
 
@@ -70,7 +70,7 @@ export async function clientIp(): Promise<string> {
 
 export const limits = {
   async signup(ip: string) {
-    await consume('signup', ip, QUOTA.signupsPerIpPerDay, DAY, 'Terlalu banyak pendaftaran dari jaringan ini. Coba lagi besok.')
+    await consume('signup', ip, QUOTA.signupsPerIpPerDay, DAY, 'rateSignup')
   },
   async loginBlocked(email: string, ip: string) {
     const [byEmail, byIp] = await Promise.all([
@@ -84,7 +84,7 @@ export const limits = {
     await record('login_fail', `ip:${ip}`)
   },
   async report(userId: string) {
-    await consume('report', userId, QUOTA.reportsPerDay, DAY, `Batas ${QUOTA.reportsPerDay} laporan per hari tercapai.`)
+    await consume('report', userId, QUOTA.reportsPerDay, DAY, 'rateReport', 1, { limit: QUOTA.reportsPerDay })
   },
   /** Mengembalikan false bila kuota AI hari ini habis (draf tetap dibuat, tanpa AI). */
   async tryAi(userId: string): Promise<boolean> {
@@ -93,10 +93,10 @@ export const limits = {
     return true
   },
   async jobs(userId: string, n: number) {
-    await consume('job', userId, QUOTA.jobsPerHour, HOUR, `Batas ${QUOTA.jobsPerHour} posting/screenshot per jam tercapai.`, n)
+    await consume('job', userId, QUOTA.jobsPerHour, HOUR, 'rateJobs', n, { limit: QUOTA.jobsPerHour })
   },
   async webhookTest(userId: string) {
-    await consume('webhook_test', userId, QUOTA.webhookTestsPerHour, HOUR, 'Terlalu banyak tes webhook. Coba lagi nanti.')
+    await consume('webhook_test', userId, QUOTA.webhookTestsPerHour, HOUR, 'rateWebhookTest')
   },
   /** Total storage gambar milik pengguna + tambahan baru tidak boleh melebihi kuota. */
   async storage(userId: string, addBytes: number) {
@@ -105,13 +105,13 @@ export const limits = {
       [userId],
     )
     if (Number(r?.total ?? 0) + addBytes > QUOTA.storageMb * 1024 * 1024) {
-      throw new HttpError(413, 'storage_quota', `Kuota storage ${QUOTA.storageMb} MB tercapai. Hapus laporan lama untuk mengosongkan ruang.`)
+      throw new HttpError(413, 'storage_quota', 'storageQuota', undefined, { mb: QUOTA.storageMb })
     }
   },
   async imagesPerReport(reportId: string, adding: number) {
     const r = await one<{ n: number }>('SELECT COUNT(*) AS n FROM report_images WHERE report_id = ?', [reportId])
     if (Number(r?.n ?? 0) + adding > QUOTA.imagesPerReport) {
-      throw new HttpError(413, 'image_limit', `Maksimal ${QUOTA.imagesPerReport} gambar per laporan.`)
+      throw new HttpError(413, 'image_limit', 'imageLimit', undefined, { max: QUOTA.imagesPerReport })
     }
   },
 }

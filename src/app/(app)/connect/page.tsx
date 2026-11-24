@@ -5,12 +5,14 @@ import { env } from '@/lib/env'
 import { getDict } from '@/lib/i18n/server'
 import { getIntegration } from '@/lib/integrations'
 import { getAiSetting, toPublicAi } from '@/lib/repo/ai-settings'
-import { getConnection } from '@/lib/repo/connections'
+import { getConnection, isTokenAuth } from '@/lib/repo/connections'
 import { listDestinations, toPublic } from '@/lib/repo/destinations'
 import { requireUser } from '@/lib/session'
 import { AiPanel, ConnectorCard, WebhooksManager, type ConnectorView, type OneClickView } from './client'
 
-export const metadata = { title: 'Koneksi' }
+export async function generateMetadata() {
+  return { title: (await getDict()).t.titles.connect }
+}
 
 export default async function ConnectPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const user = await requireUser()
@@ -25,6 +27,9 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
           id: c.id,
           label: c.label,
           configured: c.isConfigured(),
+          token: c.tokenAuth ? { help: c.tokenAuth.help, fields: c.tokenAuth.fields } : null,
+          // Hanya 4 karakter terakhir yang sampai ke browser.
+          tokenHint: conn && isTokenAuth(conn) ? `••••${conn.accessToken.slice(-4)}` : null,
           connected: Boolean(conn),
           accountName: conn?.accountName ?? null,
           accounts: (conn?.meta.accounts ?? []).map((a) => a.name),

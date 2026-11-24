@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/client'
-import type { Board, ConnectorSetup } from '@/lib/connectors/types'
+import type { Board, ConnectorSetup, TokenField } from '@/lib/connectors/types'
 import { fmt } from '@/lib/i18n/dict'
 import { useI18n } from '@/lib/i18n/client'
 import type { AiProvider, PublicAiSetting } from '@/lib/repo/ai-settings'
@@ -13,6 +13,8 @@ export type ConnectorView = {
   id: string
   label: string
   configured: boolean
+  token: { help: string; fields: TokenField[] } | null
+  tokenHint: string | null
   connected: boolean
   accountName: string | null
   accounts: string[]
@@ -31,7 +33,7 @@ export type OneClickView = {
   redirectUri: string
 }
 
-function SetupDetails({ setup, redirectUri }: { setup: ConnectorSetup; redirectUri: string }) {
+function SetupDetails({ id, setup, redirectUri }: { id: string; setup: ConnectorSetup; redirectUri: string }) {
   const { t } = useI18n()
   return (
     <details>
@@ -40,7 +42,7 @@ function SetupDetails({ setup, redirectUri }: { setup: ConnectorSetup; redirectU
       </summary>
       <div className="stack" style={{ marginTop: 8 }}>
         <ol className="small" style={{ paddingLeft: 18, margin: 0 }}>
-          {setup.steps.map((s) => (
+          {(t.integrations.setupSteps[id] ?? setup.steps).map((s) => (
             <li key={s}>{s}</li>
           ))}
         </ol>
@@ -59,17 +61,87 @@ function SetupDetails({ setup, redirectUri }: { setup: ConnectorSetup; redirectU
   )
 }
 
+function TokenForm({ c }: { c: ConnectorView & { token: NonNullable<ConnectorView['token']> } }) {
+  const { t } = useI18n()
+  const router = useRouter()
+  const [values, setValues] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setMsg(null)
+    try {
+      const r = await api<{ account: string }>(`/api/connectors/${c.id}/token`, { method: 'POST', json: values })
+      setValues({})
+      setMsg({ text: fmt(t.integrations.tokenSaved, { name: r.account }) })
+      router.refresh()
+    } catch (err) {
+      setMsg({ text: (err as Error).message, bad: true })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <details>
+      <summary className="small" style={{ cursor: 'pointer' }}>
+        {c.connected && c.tokenHint ? t.integrations.tokenReplace : t.integrations.tokenUse}
+      </summary>
+      <form className="stack" style={{ marginTop: 8 }} onSubmit={save}>
+        <p className="small">{t.integrations.tokenHelp[c.id]}</p>
+        <a className="small" href={c.token.help} target="_blank" rel="noreferrer">
+          {t.integrations.tokenGet} ↗
+        </a>
+        {c.token.fields.map((f) => (
+          <label key={f.name} className="field">
+            <span>{f.label}</span>
+            <input
+              className="input mono"
+              type={f.type ?? 'text'}
+              required
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={f.placeholder}
+              value={values[f.name] ?? ''}
+              onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+            />
+          </label>
+        ))}
+        <p className="small">{t.integrations.tokenSecret}</p>
+        {msg && (
+          <p className={`notice ${msg.bad ? 'bad' : 'ok'}`} role={msg.bad ? 'alert' : 'status'}>
+            {msg.text}
+          </p>
+        )}
+        <div className="row">
+          <button className="btn primary" type="submit" disabled={busy || c.token.fields.some((f) => !values[f.name]?.trim())}>
+            {busy ? t.common.saving : t.integrations.tokenSave}
+          </button>
+        </div>
+      </form>
+    </details>
+  )
+}
+
 export function ConnectorCard({ c }: { c: ConnectorView }) {
   const { t } = useI18n()
   const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const available = c.configured || Boolean(c.token)
   return (
     <>
       <div className="row between">
         <p className="subtitle">{c.label}</p>
-        <span className={`tag ${c.connected ? 'ok' : 'dim'}`}>{c.connected ? t.integrations.connected : 'off'}</span>
+        <span className={`tag ${c.connected ? 'ok' : 'dim'}`}>{c.connected ? t.integrations.connected : available ? t.integrations.available : 'off'}</span>
       </div>
       {c.connected && c.accountName && <p className="small">{c.accountName}</p>}
+      {c.connected && c.tokenHint && (
+        <p className="small mono">
+          {t.integrations.tokenConnected} · {c.tokenHint}
+        </p>
+      )}
       <p className="small">
         {[c.imagesAsFiles ? t.integrations.imagesFiles : t.integrations.imagesText, c.supportsLogin ? t.integrations.loginOk : null]
           .filter(Boolean)
@@ -91,8 +163,10 @@ export function ConnectorCard({ c }: { c: ConnectorView }) {
           <a className={`btn ${c.connected ? '' : 'primary'}`} href={`/api/connectors/${c.id}/authorize`}>
             {c.connected ? t.integrations.connect : fmt(t.connect.connect, { tool: c.label })}
           </a>
+        ) : c.token ? (
+          !c.connected && <span className="small">{t.integrations.tokenOnly}</span>
         ) : (
-          <span className="small">{t.integrations.notEnabled}</span>
+          <span className="small">{c.id === 'basecamp' ? t.integrations.basecampAdmin : t.integrations.notEnabled}</span>
         )}
         {c.connected && (
           <button
@@ -109,7 +183,8 @@ export function ConnectorCard({ c }: { c: ConnectorView }) {
           </button>
         )}
       </div>
-      {!c.configured && <SetupDetails setup={c.setup} redirectUri={c.redirectUri} />}
+      {c.token && <TokenForm c={{ ...c, token: c.token }} />}
+      {!c.configured && <SetupDetails id={c.id} setup={c.setup} redirectUri={c.redirectUri} />}
     </>
   )
 }
@@ -228,7 +303,7 @@ export function WebhooksManager({ initial, cloud, oneClick }: { initial: PublicD
             <p className="small">
               {o.label}: {t.integrations.notEnabled}
             </p>
-            <SetupDetails setup={o.setup!} redirectUri={o.redirectUri} />
+            <SetupDetails id={o.id} setup={o.setup!} redirectUri={o.redirectUri} />
           </div>
         ))}
 

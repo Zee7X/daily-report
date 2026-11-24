@@ -6,12 +6,14 @@ import { listTemplates } from '@/lib/repo/templates'
 import { requireUser } from '@/lib/session'
 import { NewReportForm } from './form'
 
-export const metadata = { title: 'Laporan baru' }
+export async function generateMetadata() {
+  return { title: (await getDict()).t.titles.newReport }
+}
 
 export default async function NewReportPage() {
   const user = await requireUser()
   const { t, locale } = await getDict()
-  const [templates, options, ai] = await Promise.all([listTemplates(user.id), targetOptions(user), aiFor(user.id)])
+  const [templates, options, ai] = await Promise.all([listTemplates(user.id, user.locale), targetOptions(user), aiFor(user.id)])
   const today = new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'id-ID', { day: 'numeric', month: 'short' }).format(
     new Date(),
   )

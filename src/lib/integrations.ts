@@ -40,7 +40,7 @@ const discord: Integration = {
   setup: {
     url: 'https://discord.com/developers/applications',
     env: ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET'],
-    steps: ['New Application', 'OAuth2 → Redirects: tambahkan Redirect URI di bawah', 'Salin Client ID & Client Secret ke environment'],
+    steps: ['New Application', 'OAuth2 → Redirects: add the Redirect URI below', 'Copy the Client ID & Client Secret into the environment'],
   },
   redirectUri: () => cb('discord'),
   authorizeUrl(state) {
@@ -68,7 +68,7 @@ const discord: Integration = {
   },
   async apply(userId, r) {
     const w = r.webhook as { url?: string; name?: string } | undefined
-    if (!w?.url) throw new Error('Discord tidak mengembalikan webhook')
+    if (!w?.url) throw new Error('Discord did not return a webhook')
     await assertWebhookUrl('discord', w.url)
     await createDestination(userId, { kind: 'discord', name: w.name || 'Discord', url: w.url, secret: null })
     return '/connect?connected=discord'
@@ -86,8 +86,8 @@ const slack: Integration = {
     env: ['SLACK_CLIENT_ID', 'SLACK_CLIENT_SECRET'],
     steps: [
       'Create New App → From scratch',
-      'OAuth & Permissions: tambahkan Redirect URL di bawah dan scope incoming-webhook',
-      'Manage Distribution → Activate Public Distribution (agar workspace lain bisa memasang); salin Client ID & Secret',
+      'OAuth & Permissions: add the Redirect URL below and the incoming-webhook scope',
+      'Manage Distribution → Activate Public Distribution (so other workspaces can install it); copy the Client ID & Secret',
     ],
   },
   redirectUri: () => cb('slack'),
@@ -107,7 +107,7 @@ const slack: Integration = {
   async apply(userId, r) {
     const w = r.incoming_webhook as { url?: string; channel?: string } | undefined
     const team = (r.team as { name?: string } | undefined)?.name
-    if (!w?.url) throw new Error('Slack tidak mengembalikan webhook')
+    if (!w?.url) throw new Error('Slack did not return a webhook')
     await assertWebhookUrl('slack', w.url)
     await createDestination(userId, { kind: 'slack', name: [w.channel, team].filter(Boolean).join(' · ') || 'Slack', url: w.url, secret: null })
     return '/connect?connected=slack'
@@ -143,7 +143,7 @@ const openrouter: Integration = {
     return (await res.json()) as Record<string, unknown>
   },
   async apply(userId, r) {
-    if (typeof r.key !== 'string' || !r.key) throw new Error('OpenRouter tidak mengembalikan API key')
+    if (typeof r.key !== 'string' || !r.key) throw new Error('OpenRouter did not return an API key')
     await saveAiSetting(userId, { provider: 'openrouter', apiKey: r.key, model: DEFAULT_MODEL.openrouter, label: 'OpenRouter' })
     return '/connect?connected=ai'
   },

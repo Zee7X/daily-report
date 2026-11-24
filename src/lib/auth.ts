@@ -174,7 +174,13 @@ const mapState = (r: StateRow): OAuthState => ({
   pkceVerifier: r.pkce_verifier ? decrypt(r.pkce_verifier) : null,
 })
 
-/** Callback: tandai state terpakai (sekali), kembalikan isinya. */
+/**
+ * Callback: tandai state terpakai (sekali), kembalikan isinya. null = state tidak ada/kedaluwarsa/sudah dipakai;
+ * error infrastruktur (DB, crypto) dilempar ke pemanggil, tidak ditelan.
+ * Ulangan db.ts hanya terjadi pada error koneksi. Bila UPDATE sudah terterap tetapi balasannya hilang, ulangannya
+ * mendapat 0 baris dan kita melapor invalid_state: aman (state tidak pernah terpakai dua kali), pengguna cukup mengulang login.
+ * Dibiarkan begitu karena penanda "milik request ini" butuh kolom unik per request; cap waktu ms bisa kembar pada replay.
+ */
 export async function useOAuthState(state: string, provider: string): Promise<OAuthState | null> {
   const hash = sha256(state)
   const res = await exec(
@@ -197,6 +203,7 @@ export async function saveOAuthResult(state: string, encryptedResult: string): P
 export async function completeOAuthState(state: string, nonce: string, key: string): Promise<OAuthState | null> {
   if (!state || !nonce || !key) return null
   const hash = sha256(state)
+  // Ulangan db.ts setelah UPDATE yang terlanjur terterap berakhir di sini sebagai null (lihat useOAuthState): gagal aman.
   const res = await exec(
     'UPDATE oauth_states SET completed_at = ? WHERE state_hash = ? AND nonce_hash = ? AND completion_hash = ? AND used_at IS NOT NULL AND completed_at IS NULL AND result IS NOT NULL AND expires_at > ?',
     [new Date(), hash, sha256(nonce), sha256(key), new Date()],

@@ -16,9 +16,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
   const integration = getIntegration(id)
   const sp = req.nextUrl.searchParams
-  const state = integration
-    ? await completeOAuthState(sp.get('s') ?? '', req.cookies.get(OAUTH_NONCE_COOKIE)?.value ?? '', sp.get('k') ?? '').catch(() => null)
-    : null
+  let state: Awaited<ReturnType<typeof completeOAuthState>> = null
+  if (integration) {
+    try {
+      state = await completeOAuthState(sp.get('s') ?? '', req.cookies.get(OAUTH_NONCE_COOKIE)?.value ?? '', sp.get('k') ?? '')
+    } catch (err) {
+      console.error(`Integrasi ${id} gagal menyelesaikan state:`, err instanceof Error ? err.message : err)
+      return go('/connect?error=server_busy')
+    }
+  }
   if (!integration || !state || state.provider !== `int:${id}` || !state.result) return go('/connect?error=invalid_state')
   const user = await currentUser()
   if (!user || user.id !== state.userId) return go('/connect?error=session_mismatch')

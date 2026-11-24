@@ -6,7 +6,7 @@ import { currentUser } from '@/lib/session'
 
 // GET /api/locale?l=en&next=/reports — ganti bahasa UI (dan bahasa label laporan)
 export async function GET(req: NextRequest) {
-  const l = req.nextUrl.searchParams.get('l') === 'en' ? 'en' : 'id'
+  const l = req.nextUrl.searchParams.get('l') === 'id' ? 'id' : 'en'
   const next = req.nextUrl.searchParams.get('next') ?? '/'
   const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/'
   const user = await currentUser().catch(() => null)

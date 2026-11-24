@@ -7,6 +7,7 @@ import type { RenderableImage } from '../connectors/types'
 import { computeEditDiff } from '../report/diff'
 import { LABELS } from '../report/render'
 import { renderable } from '../report/service'
+import { HttpError } from '../http'
 import type { Job, JobType } from '../repo/jobs'
 import {
   addImage,
@@ -52,7 +53,7 @@ function captionFromUrl(raw: string) {
 const screenshotHandler: Handler = async (job) => {
   const p = ScreenshotPayload.parse(job.payload)
   const report = await getReport(job.userId, p.reportId)
-  if (!report) throw new Error('Laporan tidak ditemukan')
+  if (!report) throw new HttpError(404, 'report_not_found', 'report_not_found')
   const png = await screenshot(p.url, { width: p.width, height: p.height, fullPage: p.fullPage })
   await limits.storage(job.userId, png.length)
   const id = randomUUID()
@@ -76,20 +77,20 @@ const postHandler: Handler = async (job) => {
   const p = PostPayload.parse(job.payload)
   const user = await getUser(job.userId)
   const report = await getReport(job.userId, p.reportId)
-  if (!user || !report) throw new Error('Laporan tidak ditemukan')
+  if (!user || !report) throw new HttpError(404, 'report_not_found', 'report_not_found')
   const target = await getTarget(report.id)
-  if (!target) throw new Error('Tujuan posting belum dipilih')
+  if (!target) throw new HttpError(409, 'no_target', 'noTarget')
   const labels = LABELS[user.locale]
 
   // Tujuan webhook: Discord/Slack/Teams/JSON umum. Webhook tidak bisa mengedit pesan lama, jadi selalu kirim baru.
   if (target.provider === 'webhook') {
     const dest = await getDestination(user.id, target.cardId)
-    if (!dest) throw new Error('Webhook tujuan sudah dihapus')
+    if (!dest) throw new HttpError(404, 'destination_not_found', 'webhookDestGone')
     const images: WebhookImage[] = []
     for (const img of renderable(await listImages(report.id))) {
       images.push({ id: img.id, number: img.number, caption: img.caption, mime: img.row.mime, data: await storage().get(img.row.storageKey) })
     }
-    const result = await sendWebhook(dest, { id: report.id, title: report.title, body: report.body, images, labels })
+    const result = await sendWebhook(dest, { id: report.id, title: report.title, body: report.body, images, labels, locale: user.locale })
     await markPosted(target.id, { commentId: result.messageId ?? `sent:${job.id}`, url: result.url, jobId: job.id })
     await setReportStatus(report.id, 'posted')
     const log = await getDraftLog(report.id)

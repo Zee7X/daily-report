@@ -14,8 +14,21 @@ export type Connection = {
   accessToken: string
   refreshToken: string | null
   expiresAt: Date | null
-  meta: { accounts?: (ConnectionAccount & { url?: string })[]; email?: string; [k: string]: unknown }
+  /**
+   * auth = 'token': token pribadi yang ditempel pengguna (bukan OAuth). Kunci Trello dan URL situs Jira
+   * ikut di sini; keduanya bukan rahasia (rahasianya tetap access_token yang terenkripsi).
+   */
+  meta: {
+    accounts?: (ConnectionAccount & { url?: string })[]
+    email?: string
+    auth?: 'token'
+    apiKey?: string
+    siteUrl?: string
+    [k: string]: unknown
+  }
 }
+
+export const isTokenAuth = (c: Pick<Connection, 'meta'>) => c.meta?.auth === 'token'
 
 type Row = {
   id: string

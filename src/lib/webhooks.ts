@@ -5,6 +5,7 @@ import net from 'node:net'
 import { isPrivateAddress } from './browser'
 import { env } from './env'
 import { HttpError } from './http'
+import { dictionaries, fmt, type Locale } from './i18n/dict'
 import type { DestinationKind } from './repo/destinations'
 import { layout, figureCaption, renderChat, renderHtml, renderMarkdown, escapeHtml, type ImageLabels } from './report/render'
 import type { RenderableImage } from './connectors/types'
@@ -14,7 +15,10 @@ import type { ReportBody } from './report/types'
 // dan JSON umum untuk n8n/Zapier/Make (gambar base64, opsional tanda tangan HMAC).
 
 export type WebhookImage = RenderableImage & { mime: string; data: Buffer }
-export type WebhookReport = { id: string; title: string; body: ReportBody; images: WebhookImage[]; labels: ImageLabels }
+export type WebhookReport = { id: string; title: string; body: ReportBody; images: WebhookImage[]; labels: ImageLabels; locale: Locale }
+
+const msg = (r: WebhookReport, key: string, vars: Record<string, string> = {}) =>
+  fmt((dictionaries[r.locale].apiErrors as Record<string, string>)[key], vars)
 export type WebhookResult = { messageId: string | null; url: string | null; imagesSent: number; note: string | null }
 
 const TIMEOUT_MS = 20_000
@@ -36,26 +40,26 @@ export async function assertWebhookUrl(kind: DestinationKind, raw: string) {
   try {
     u = new URL(raw)
   } catch {
-    throw new HttpError(400, 'invalid_webhook_url', 'URL webhook tidak valid')
+    throw new HttpError(400, 'invalid_webhook_url', 'webhookUrlInvalid')
   }
   // Mode lokal: endpoint di komputer sendiri (relay, n8n lokal, pengujian) diizinkan untuk semua jenis.
   const localRelay = !env.isCloud && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)
   if (localRelay) return
   const httpsOnly = kind !== 'generic' || env.isCloud
   if (u.protocol !== 'https:' && !(u.protocol === 'http:' && !httpsOnly)) {
-    throw new HttpError(400, 'invalid_webhook_url', 'URL webhook harus https')
+    throw new HttpError(400, 'invalid_webhook_url', 'webhookUrlHttps')
   }
   if (kind === 'discord' && !(/^(?:canary\.|ptb\.)?discord(?:app)?\.com$/.test(u.hostname) && u.pathname.startsWith('/api/webhooks/'))) {
-    throw new HttpError(400, 'invalid_webhook_url', 'Bukan URL webhook Discord (https://discord.com/api/webhooks/…)')
+    throw new HttpError(400, 'invalid_webhook_url', 'webhookNotDiscord')
   }
   if (kind === 'slack' && u.hostname !== 'hooks.slack.com') {
-    throw new HttpError(400, 'invalid_webhook_url', 'Bukan URL incoming webhook Slack (https://hooks.slack.com/…)')
+    throw new HttpError(400, 'invalid_webhook_url', 'webhookNotSlack')
   }
   if (env.isCloud) {
     const host = u.hostname.replace(/^\[|\]$/g, '')
     const addrs = net.isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => [])
     if (!addrs.length || addrs.some((a) => isPrivateAddress(a.address))) {
-      throw new HttpError(400, 'private_url', 'Mode cloud hanya bisa mengirim ke alamat publik')
+      throw new HttpError(400, 'private_url', 'privateUrlWebhook')
     }
   }
 }
@@ -73,7 +77,7 @@ async function send(url: string, init: RequestInit): Promise<Response> {
 async function ensureOk(res: Response, label: string) {
   if (res.ok) return
   const text = await res.text().catch(() => '')
-  throw new Error(`${label} menolak (${res.status}): ${text.slice(0, 200)}`)
+  throw new HttpError(502, 'webhook_rejected', 'webhookRejected', undefined, { label, status: res.status, detail: text.slice(0, 200) })
 }
 
 function chunk(text: string, size: number): string[] {
@@ -144,7 +148,7 @@ async function sendDiscord(url: string, r: WebhookReport): Promise<WebhookResult
     messageId: firstId,
     url: null,
     imagesSent: r.images.length - skipped.length,
-    note: skipped.length ? `${skipped.length} gambar melebihi batas 10 MB Discord dan tidak terkirim` : null,
+    note: skipped.length ? msg(r, 'noteDiscordSkipped', { n: String(skipped.length) }) : null,
   }
 }
 
@@ -162,7 +166,7 @@ async function sendSlack(url: string, r: WebhookReport): Promise<WebhookResult> 
     messageId: null,
     url: null,
     imagesSent: 0,
-    note: r.images.length ? 'Incoming webhook Slack tidak bisa melampirkan file; gambar ditulis sebagai rujukan' : null,
+    note: r.images.length ? msg(r, 'noteSlackImages') : null,
   }
 }
 
@@ -206,7 +210,7 @@ async function sendTeams(url: string, r: WebhookReport): Promise<WebhookResult> 
     messageId: null,
     url: null,
     imagesSent: 0,
-    note: r.images.length ? 'Webhook Teams tidak bisa melampirkan file; gambar ditulis sebagai rujukan' : null,
+    note: r.images.length ? msg(r, 'noteTeamsImages') : null,
   }
 }
 
@@ -255,7 +259,7 @@ async function sendGeneric(url: string, secret: string | null, r: WebhookReport)
     messageId: null,
     url: null,
     imagesSent: payload.images.length - omitted,
-    note: omitted ? `${omitted} gambar tidak disertakan (total melebihi 20 MB)` : null,
+    note: omitted ? msg(r, 'noteGenericOmitted', { n: String(omitted) }) : null,
   }
 }
 
@@ -277,15 +281,17 @@ export async function sendWebhook(
 }
 
 /** Pesan uji saat pengguna menambah webhook. */
-export function testReport(labels: ImageLabels): WebhookReport {
+export function testReport(locale: Locale, labels: ImageLabels): WebhookReport {
+  const m = dictionaries[locale].apiErrors
   return {
     id: 'test',
-    title: 'Daily Report — test webhook',
+    title: m.testTitle,
     labels,
+    locale,
     images: [],
     body: {
-      intro: 'Webhook terhubung. Laporan berikutnya akan dikirim ke sini.',
-      sections: [{ id: 's', title: 'Tes', selected: true, items: [{ id: 'i', text: 'Format poin dan **teks tebal**', selected: true, imageIds: [] }] }],
+      intro: m.testIntro,
+      sections: [{ id: 's', title: m.testSection, selected: true, items: [{ id: 'i', text: m.testItem, selected: true, imageIds: [] }] }],
       closing: '',
     },
   }

@@ -11,7 +11,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     const { id } = await ctx.params
     const integration = getIntegration(id)
     if (!integration) throw new HttpError(404, 'unknown_integration')
-    if (!integration.isConfigured()) throw new HttpError(503, 'not_configured', `${integration.label} belum diaktifkan`)
+    if (!integration.isConfigured()) throw new HttpError(503, 'not_configured', 'notEnabled', undefined, { label: integration.label })
     const base = await currentBase()
     const user = await currentUser()
     if (!user) return NextResponse.redirect(new URL('/login?next=%2Fconnect', base))

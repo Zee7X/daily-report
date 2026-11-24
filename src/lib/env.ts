@@ -10,7 +10,7 @@ function str(name: string, fallback = ''): string {
 function oneOf<T extends string>(name: string, allowed: readonly T[], fallback: T): T {
   const v = str(name, fallback) as T
   if (!allowed.includes(v)) {
-    throw new Error(`${name} harus salah satu dari: ${allowed.join(', ')} (sekarang: "${v}")`)
+    throw new Error(`${name} must be one of: ${allowed.join(', ')} (now: "${v}")`)
   }
   return v
 }

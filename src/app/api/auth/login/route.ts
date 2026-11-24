@@ -22,17 +22,17 @@ export const POST = api(
     const input = Input.parse(await req.json())
     const ip = await clientIp()
     if (await limits.loginBlocked(input.email, ip)) {
-      throw new HttpError(429, 'too_many_attempts', 'Terlalu banyak percobaan. Coba lagi 15 menit lagi.')
+      throw new HttpError(429, 'too_many_attempts', 'tooManyAttempts')
     }
     const found = await getPasswordHash(input.email)
     const ok = await verifyPassword(input.password, found?.hash ?? null)
     if (!found || !ok) {
       await limits.loginFailed(input.email, ip)
-      throw new HttpError(401, 'invalid_credentials', 'Email atau password salah')
+      throw new HttpError(401, 'invalid_credentials', 'invalidCredentials')
     }
     const next = safeNext(input.next)
     if (await onAuthHost()) {
-      if (!input.n) throw new HttpError(400, 'missing_nonce', 'Buka halaman login dari aplikasi lalu coba lagi.')
+      if (!input.n) throw new HttpError(400, 'missing_nonce', 'missingNonce')
       return NextResponse.json({ redirect: await handoffUrl(found.user.id, env.appUrl, next, input.n) })
     }
     await createSession(found.user)

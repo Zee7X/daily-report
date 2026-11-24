@@ -2,6 +2,8 @@ import 'server-only'
 import { NextResponse, type NextRequest } from 'next/server'
 import { ZodError } from 'zod'
 import { env } from './env'
+import { dictionaries, fmt, type Locale } from './i18n/dict'
+import { getLocale } from './i18n/server'
 import { currentUser } from './session'
 import type { User } from './repo/users'
 
@@ -11,6 +13,7 @@ export class HttpError extends Error {
     public code: string,
     message?: string,
     public extra?: Record<string, unknown>,
+    public vars?: Record<string, string | number>,
   ) {
     super(message ?? code)
   }
@@ -36,16 +39,27 @@ export function api<Ctx = unknown>(
   }
 }
 
-export function errorResponse(err: unknown) {
+/** message sebuah HttpError boleh berupa kunci t.apiErrors; diterjemahkan ke bahasa yang diminta. */
+export function describeError(err: unknown, locale: Locale): string {
+  if (!(err instanceof HttpError)) return err instanceof Error ? err.message : String(err)
+  const tpl = (dictionaries[locale].apiErrors as Record<string, string>)[err.message]
+  if (!tpl) return err.message
+  return fmt(tpl, Object.fromEntries(Object.entries(err.vars ?? {}).map(([k, v]) => [k, String(v)])))
+}
+
+export async function errorResponse(err: unknown) {
+  const locale = await getLocale().catch(() => 'en' as const)
   if (err instanceof HttpError) {
-    return NextResponse.json({ error: err.code, message: err.message, ...err.extra }, { status: err.status })
+    return NextResponse.json({ error: err.code, message: describeError(err, locale), ...err.extra }, { status: err.status })
   }
   if (err instanceof ZodError) {
-    return NextResponse.json({ error: 'invalid_input', issues: err.issues }, { status: 400 })
+    const first = err.issues[0]?.message
+    const message = first && (dictionaries[locale].apiErrors as Record<string, string>)[first]
+    return NextResponse.json({ error: 'invalid_input', ...(message ? { message } : {}), issues: err.issues }, { status: 400 })
   }
   console.error(err)
   // Di mode cloud, detail error internal (SQL, API pihak ketiga) tidak dikirim ke browser.
-  const message = env.isCloud ? 'Terjadi kesalahan di server' : err instanceof Error ? err.message : 'Internal error'
+  const message = env.isCloud ? dictionaries[locale].apiErrors.serverError : err instanceof Error ? err.message : 'Internal error'
   return NextResponse.json({ error: 'internal', message }, { status: 500 })
 }
 

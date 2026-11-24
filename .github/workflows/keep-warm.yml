@@ -1,0 +1,69 @@
+name: Keep warm
+
+# Membangunkan fungsi Vercel dan cluster TiDB supaya request pertama setelah idle tidak gagal.
+# Secret: KEEPWARM_URLS (URL https, satu per baris atau dipisah koma)
+#         KEEPWARM_DATABASE_URLS (mysql://user:pass@host:port/db, satu per baris)
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping URLs
+        env:
+          KEEPWARM_URLS: ${{ secrets.KEEPWARM_URLS }}
+        run: |
+          urls=$(printf '%s' "$KEEPWARM_URLS" | tr ',\r' '\n\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || true)
+          if [ -z "$urls" ]; then echo "KEEPWARM_URLS kosong, dilewati."; exit 0; fi
+          total=0; ok=0
+          while IFS= read -r u; do
+            total=$((total + 1))
+            rest=${u#*://}; host=${rest%%[/?#]*}; host=${host##*@}
+            case "$u" in
+              https://*) ;;
+              *) echo "$host FAIL bukan-https"; continue ;;
+            esac
+            out=$(curl -s -o /dev/null -m 30 --retry 1 --retry-all-errors --retry-delay 2 -w '%{http_code} %{time_total}' "$u") && rc=0 || rc=$?
+            code=${out%% *}; secs=${out##* }
+            if [ "$rc" -eq 0 ] && [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
+              echo "$host OK $code ${secs}s"; ok=$((ok + 1))
+            else
+              echo "$host FAIL status=$code curl=$rc ${secs}s"
+            fi
+          done <<< "$urls"
+          # Merah hanya bila semua URL gagal.
+          if [ "$ok" -eq 0 ]; then echo "Semua $total URL gagal."; exit 1; fi
+
+      - name: Set up Node
+        if: ${{ !cancelled() }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Checkout
+        if: ${{ !cancelled() }}
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/keep-warm-db.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Ping databases
+        if: ${{ !cancelled() }}
+        env:
+          KEEPWARM_DATABASE_URLS: ${{ secrets.KEEPWARM_DATABASE_URLS }}
+        run: |
+          if [ -z "$KEEPWARM_DATABASE_URLS" ]; then echo "KEEPWARM_DATABASE_URLS kosong, dilewati."; exit 0; fi
+          npm i mysql2 --prefix "$RUNNER_TEMP/kw" --no-audit --no-fund --silent
+          KEEPWARM_MODULES="$RUNNER_TEMP/kw" node scripts/keep-warm-db.mjs

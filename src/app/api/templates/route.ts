@@ -5,7 +5,7 @@ import { createTemplate, getTemplate, listTemplates } from '@/lib/repo/templates
 
 // FR-5: CRUD template laporan
 export const GET = api(async (_req, { user }) => {
-  return NextResponse.json({ templates: await listTemplates(user.id) })
+  return NextResponse.json({ templates: await listTemplates(user.id, user.locale) })
 })
 
 export const POST = api(async (req, { user }) => {

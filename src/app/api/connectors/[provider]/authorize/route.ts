@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
   try {
     const { provider } = await ctx.params
     const connector = getConnector(provider)
-    if (!connector.isConfigured()) throw new HttpError(503, 'not_configured', `${connector.label} belum dikonfigurasi`)
+    if (!connector.isConfigured()) throw new HttpError(503, 'not_configured', 'notConfigured', undefined, { label: connector.label })
     const intent = req.nextUrl.searchParams.get('intent') === 'login' ? 'login' : 'connect'
     if (intent === 'login' && !connector.supportsLogin) throw new HttpError(400, 'login_not_supported')
     const base = await currentBase()

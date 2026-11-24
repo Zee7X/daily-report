@@ -11,7 +11,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const integration = getIntegration(id)
   const params = req.nextUrl.searchParams
   const stateParam = params.get('state') ?? ''
-  const state = integration && stateParam ? await useOAuthState(stateParam, `int:${id}`).catch(() => null) : null
+  let state: Awaited<ReturnType<typeof useOAuthState>> = null
+  if (integration && stateParam) {
+    try {
+      state = await useOAuthState(stateParam, `int:${id}`)
+    } catch (err) {
+      console.error(`Integrasi ${id} gagal membaca state:`, err instanceof Error ? err.message : err)
+      return NextResponse.redirect(new URL('/connect?error=server_busy', env.appUrl))
+    }
+  }
   if (!integration || !state) return NextResponse.redirect(new URL('/connect?error=invalid_state', env.appUrl))
   const back = (path: string) => {
     const res = NextResponse.redirect(new URL(path, state.returnBase))

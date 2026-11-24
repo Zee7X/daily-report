@@ -1,6 +1,9 @@
+import { getDict } from '@/lib/i18n/server'
 import { FragmentCallback } from './fragment'
 
-export const metadata = { title: 'Menghubungkan…', robots: { index: false } }
+export async function generateMetadata() {
+  return { title: (await getDict()).t.titles.connecting, robots: { index: false } }
+}
 
 // Halaman perantara untuk penyedia yang mengembalikan token di #fragment URL (mis. Trello).
 // Fragment tidak pernah dikirim ke server oleh browser, jadi halaman ini membacanya lalu mengirim lewat POST.

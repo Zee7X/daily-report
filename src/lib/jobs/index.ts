@@ -1,6 +1,8 @@
 import 'server-only'
 import { after } from 'next/server'
 import { env } from '../env'
+import { describeError } from '../http'
+import { getUser } from '../repo/users'
 import { claimJob, failJob, finishJob, getJob, insertJob, MAX_ATTEMPTS, type Job, type JobType } from '../repo/jobs'
 import { handlers } from './handlers'
 
@@ -51,7 +53,8 @@ export async function runJob(jobId: string, expectedType?: JobType): Promise<'do
     await finishJob(job.id, result ?? {})
     return 'done'
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+    const locale = (await getUser(job.userId).catch(() => null))?.locale ?? 'en'
+    const message = describeError(err, locale)
     const final = job.attempts >= MAX_ATTEMPTS
     console.error(`Job ${job.type} ${job.id} percobaan ${job.attempts} gagal:`, message)
     await failJob(job.id, message, final)

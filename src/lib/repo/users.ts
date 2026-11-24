@@ -21,7 +21,7 @@ const map = (r: Row): User => ({
   id: r.id,
   email: r.email,
   name: r.name,
-  locale: r.locale === 'en' ? 'en' : 'id',
+  locale: r.locale === 'id' ? 'id' : 'en',
   sessionVersion: Number(r.session_version ?? 0),
   emailVerified: Boolean(r.email_verified),
 })
@@ -52,7 +52,7 @@ export async function createUser(
     opts.emailVerified ? 1 : 0,
   ])
   const user = await findUserByEmail(email)
-  if (!user) throw new Error('Gagal membuat pengguna')
+  if (!user) throw new Error('Could not create the user')
   return user
 }
 

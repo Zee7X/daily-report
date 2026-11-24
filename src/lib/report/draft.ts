@@ -1,6 +1,8 @@
 import 'server-only'
 import { z } from 'zod'
 import { completeJson, extractJson, type AiConfig } from '../ai'
+import { describeError } from '../http'
+import { dictionaries } from '../i18n/dict'
 import type { CardDetail } from '../connectors/types'
 import { maskSecrets } from '../mask'
 import type { Template } from '../repo/templates'
@@ -54,11 +56,11 @@ function sourcesAsText(sources: CardDetail[]) {
         .map((c) => `  - ${c.author} (${c.createdAt.slice(0, 10)}): ${clip(c.text, 600).replace(/\n+/g, ' ')}`)
         .join('\n')
       return [
-        `### Kartu ${i + 1}: ${s.title}`,
-        `Project: ${s.project} | Kolom: ${s.column} | Status: ${s.completed ? 'selesai' : 'berjalan'}`,
-        s.description ? `Deskripsi:\n${clip(s.description)}` : '',
-        steps ? `Step/subtask:\n${steps}` : '',
-        comments ? `Komentar terbaru:\n${comments}` : '',
+        `### Card ${i + 1}: ${s.title}`,
+        `Project: ${s.project} | Column: ${s.column} | Status: ${s.completed ? 'done' : 'in progress'}`,
+        s.description ? `Description:\n${clip(s.description)}` : '',
+        steps ? `Steps/subtasks:\n${steps}` : '',
+        comments ? `Latest comments:\n${comments}` : '',
       ]
         .filter(Boolean)
         .join('\n')
@@ -68,10 +70,10 @@ function sourcesAsText(sources: CardDetail[]) {
 
 function buildPrompt(input: DraftInput) {
   const { template, locale } = input
-  const lang = locale === 'en' ? 'English' : 'Bahasa Indonesia'
+  const fallbackLang = locale === 'en' ? 'English' : 'Bahasa Indonesia'
   const system = [
     'You write concise work progress reports that a developer posts to a kanban card for their manager and QA.',
-    `Write in ${lang}.`,
+    `Write in the same language as the template's section titles and tone. If that is unclear, write in ${fallbackLang}.`,
     'Return ONLY a JSON object: {"intro": string, "sections": [{"title": string, "items": string[]}], "closing": string}.',
     'Use exactly the section titles given by the template, in the same order. A section may have zero items.',
     'Each item is one short, verifiable statement. Do not invent work that is not supported by the material.',
@@ -80,15 +82,15 @@ function buildPrompt(input: DraftInput) {
   ].join('\n')
   const user = [
     `## Template: ${template.name}`,
-    template.rules.tone ? `Gaya bahasa: ${template.rules.tone}` : '',
-    template.rules.rules.length ? `Aturan:\n${template.rules.rules.map((r) => `- ${r}`).join('\n')}` : '',
-    `Bagian:\n${template.sections.map((s) => `- ${s.title}${s.hint ? `: ${s.hint}` : ''}`).join('\n')}`,
-    template.rules.intro ? `Pembuka (boleh disesuaikan): ${template.rules.intro}` : '',
-    template.rules.closing ? `Penutup (boleh disesuaikan): ${template.rules.closing}` : '',
+    template.rules.tone ? `Tone: ${template.rules.tone}` : '',
+    template.rules.rules.length ? `Rules:\n${template.rules.rules.map((r) => `- ${r}`).join('\n')}` : '',
+    `Sections:\n${template.sections.map((s) => `- ${s.title}${s.hint ? `: ${s.hint}` : ''}`).join('\n')}`,
+    template.rules.intro ? `Opening (may be adapted): ${template.rules.intro}` : '',
+    template.rules.closing ? `Closing (may be adapted): ${template.rules.closing}` : '',
     '',
-    '## Bahan dari kanban',
-    sourcesAsText(input.sources) || '(tidak ada kartu sumber)',
-    input.notes.trim() ? `\n## Catatan tambahan dari pengguna\n${clip(maskSecrets(input.notes), 4000)}` : '',
+    '## Material from the kanban',
+    sourcesAsText(input.sources) || '(no source cards)',
+    input.notes.trim() ? `\n## Extra notes from the user\n${clip(maskSecrets(input.notes), 4000)}` : '',
   ]
     .filter((l) => l !== '')
     .join('\n')
@@ -156,7 +158,7 @@ export async function composeDraft(raw: DraftInput): Promise<DraftResult> {
   const input = { ...raw, sources: sanitizeSources(raw.sources) }
   if (!input.ai) return { body: fallbackDraft(input), usedAi: false, warning: null }
   if (input.allowAi === false) {
-    return { body: fallbackDraft(input), usedAi: false, warning: 'Kuota AI hari ini habis; draf disusun tanpa AI.' }
+    return { body: fallbackDraft(input), usedAi: false, warning: dictionaries[input.locale].apiErrors.aiQuotaDone }
   }
   try {
     const { system, user } = buildPrompt(input)
@@ -168,7 +170,7 @@ export async function composeDraft(raw: DraftInput): Promise<DraftResult> {
     return {
       body: fallbackDraft(input),
       usedAi: false,
-      warning: err instanceof Error ? err.message : 'AI gagal',
+      warning: err instanceof Error ? describeError(err, input.locale) : dictionaries[input.locale].apiErrors.aiFailed,
     }
   }
 }

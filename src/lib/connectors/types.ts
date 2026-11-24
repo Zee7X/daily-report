@@ -33,6 +33,17 @@ export type ConnectorSetup = {
   steps: string[]
 }
 
+export type TokenField = { name: string; label: string; type?: 'password' | 'url' | 'email' | 'text'; placeholder?: string }
+
+/** Koneksi lewat token pribadi yang ditempel pengguna, tanpa perlu aplikasi OAuth di server. */
+export type TokenAuth = {
+  /** Halaman tempat pengguna membuat token. */
+  help: string
+  fields: TokenField[]
+  /** Memeriksa token ke tool (lempar HttpError invalid_token / token_unreachable) lalu mengembalikan koneksi siap simpan. */
+  verify(input: Record<string, string>): Promise<{ connection: ConnectionInput; identity: Identity }>
+}
+
 export interface Connector {
   id: 'basecamp' | 'jira' | 'trello' | 'github' | 'linear' | 'clickup' | (string & {})
   label: string
@@ -41,7 +52,9 @@ export interface Connector {
   /** Apakah tool mendukung lampiran gambar asli di komentar/kartu. */
   imagesAsFiles: boolean
   setup: ConnectorSetup
+  /** OAuth tersedia (variabel environment terisi). Token pribadi tidak bergantung pada ini. */
   isConfigured(): boolean
+  tokenAuth?: TokenAuth
   /** Redirect URI OAuth yang harus didaftarkan di tool (ditampilkan di halaman Koneksi). */
   redirectUri(): string
   /** PKCE dipakai bila penyedia mendukungnya. */

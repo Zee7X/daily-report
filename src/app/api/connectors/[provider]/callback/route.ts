@@ -25,12 +25,23 @@ async function finish(provider: string, stateParam: string, state: OAuthState, c
   }
 }
 
+// Error infrastruktur (DB, crypto) dibedakan dari state yang memang tidak valid: pengguna diminta mencoba lagi.
+async function consume(stateParam: string, provider: string): Promise<{ state: OAuthState | null; busy: boolean }> {
+  if (!stateParam) return { state: null, busy: false }
+  try {
+    return { state: await useOAuthState(stateParam, provider), busy: false }
+  } catch (err) {
+    console.error(`OAuth state ${provider} gagal dibaca:`, err instanceof Error ? err.message : err)
+    return { state: null, busy: true }
+  }
+}
+
 export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: string }> }) {
   const { provider } = await ctx.params
   const params = req.nextUrl.searchParams
   const stateParam = params.get('state') ?? ''
-  const state = stateParam ? await useOAuthState(stateParam, provider).catch(() => null) : null
-  if (!state) return NextResponse.redirect(new URL('/login?error=invalid_state', env.appUrl))
+  const { state, busy } = await consume(stateParam, provider)
+  if (!state) return NextResponse.redirect(new URL(`/login?error=${busy ? 'server_busy' : 'invalid_state'}`, env.appUrl))
   const res = NextResponse.redirect(await finish(provider, stateParam, state, params.get('code'), params.get('error')))
   res.headers.set('Referrer-Policy', 'no-referrer')
   return res
@@ -40,8 +51,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ provider: 
   const { provider } = await ctx.params
   const body = (await req.json().catch(() => ({}))) as { state?: string; token?: string; error?: string }
   const stateParam = String(body.state ?? '')
-  const state = stateParam ? await useOAuthState(stateParam, provider).catch(() => null) : null
-  if (!state) return NextResponse.json({ redirect: new URL('/login?error=invalid_state', env.appUrl).toString() })
+  const { state, busy } = await consume(stateParam, provider)
+  if (!state) return NextResponse.json({ redirect: new URL(`/login?error=${busy ? 'server_busy' : 'invalid_state'}`, env.appUrl).toString() })
   const url = await finish(provider, stateParam, state, body.token ? String(body.token) : null, body.error ? String(body.error) : null)
   return NextResponse.json({ redirect: url.toString() })
 }

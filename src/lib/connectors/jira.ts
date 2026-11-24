@@ -1,9 +1,11 @@
 import 'server-only'
 import { env } from '../env'
-import type { Connection } from '../repo/connections'
+import { HttpError } from '../http'
+import { isTokenAuth, type Connection } from '../repo/connections'
 import { figureCaption, layout, type ImageLabels } from '../report/render'
 import type { ReportBody } from '../report/types'
 import { createClient, expiresIn, oauthToken, ref } from './http'
+import { assertPublicHttps, probe } from './token'
 import type { Board, Card, CardDetail, Column, Connector, RenderableImage } from './types'
 
 // Jira Cloud (OAuth 2.0 3LO): project → status → issue. Step = sub-task (ditandai selesai lewat transisi "Done").
@@ -27,8 +29,18 @@ async function refresh(conn: Connection) {
   return { accessToken: String(t.access_token), refreshToken: t.refresh_token ? String(t.refresh_token) : conn.refreshToken, expiresAt: expiresIn(t.expires_in) }
 }
 
-const client = createClient({ label: 'Jira', rate: { limit: 40, windowMs: 10_000 }, refresh })
-const site = (cloud: string) => `${API()}/ex/jira/${encodeURIComponent(cloud)}/rest/api/3`
+const basic = (email: string, token: string) => `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`
+
+const client = createClient({
+  label: 'Jira',
+  rate: { limit: 40, windowMs: 10_000 },
+  refresh,
+  authHeaders: (conn) => ({ Authorization: isTokenAuth(conn) ? basic(String(conn.meta.email), conn.accessToken) : `Bearer ${conn.accessToken}` }),
+})
+
+/** OAuth lewat gateway api.atlassian.com (per cloud id); token pribadi langsung ke situs Jira milik pengguna. */
+const site = (conn: Connection, cloud: string) =>
+  isTokenAuth(conn) ? `${conn.meta.siteUrl}/rest/api/3` : `${API()}/ex/jira/${encodeURIComponent(cloud)}/rest/api/3`
 
 // ── ADF ─────────────────────────────────────────────────────────────────
 
@@ -110,12 +122,46 @@ export const jira: Connector = {
     steps: [
       'Create → OAuth 2.0 integration',
       'Permissions → Jira API: read:jira-work, write:jira-work, read:jira-user; User identity API: read:me',
-      'Authorization → Callback URL = Redirect URI di bawah; Settings → salin Client ID & Secret',
+      'Authorization → Callback URL = the Redirect URI below; Settings → copy the Client ID & Secret',
     ],
   },
 
   isConfigured: () => Boolean(ID() && SECRET()),
   redirectUri,
+
+  tokenAuth: {
+    help: 'https://id.atlassian.com/manage-profile/security/api-tokens',
+    fields: [
+      { name: 'siteUrl', label: 'Site URL', type: 'url', placeholder: 'https://your-team.atlassian.net' },
+      { name: 'email', label: 'Atlassian email', type: 'email' },
+      { name: 'token', label: 'API token', type: 'password' },
+    ],
+    async verify({ siteUrl, email, token }) {
+      let u: URL
+      try {
+        u = new URL(siteUrl.trim())
+      } catch {
+        throw new HttpError(400, 'invalid_site_url', 'siteUrlInvalid')
+      }
+      if (u.username || u.password) throw new HttpError(400, 'invalid_site_url', 'siteUrlInvalid')
+      await assertPublicHttps(u)
+      const base = u.origin
+      const me = await probe<{ accountId: string; displayName: string; emailAddress?: string }>('Jira', `${base}/rest/api/3/myself`, {
+        headers: { Authorization: basic(email, token) },
+      })
+      return {
+        connection: {
+          accountId: me.accountId,
+          accountName: me.displayName,
+          accessToken: token,
+          refreshToken: null,
+          expiresAt: null,
+          meta: { auth: 'token', email, siteUrl: base, accounts: [{ id: u.host, name: u.host.replace(/\.atlassian\.net$/, ''), url: base }] },
+        },
+        identity: { email: me.emailAddress || email, name: me.displayName, verified: false },
+      }
+    },
+  },
 
   authorizeUrl(state) {
     const qs = new URLSearchParams({
@@ -139,7 +185,7 @@ export const jira: Connector = {
     const accessToken = String(t.access_token)
     const temp = { id: 'tmp', accessToken } as Connection
     const sites = await client.json<{ id: string; name: string; url: string }[]>(temp, `${API()}/oauth/token/accessible-resources`)
-    if (!sites.length) throw new Error('Akun Atlassian ini tidak punya akses ke situs Jira mana pun')
+    if (!sites.length) throw new Error('This Atlassian account has no access to any Jira site')
     const me = await client.json<{ account_id: string; email: string; name: string; email_verified?: boolean }>(temp, `${API()}/me`)
     return {
       connection: {
@@ -157,7 +203,7 @@ export const jira: Connector = {
   async listBoards(conn) {
     const boards: Board[] = []
     for (const s of conn.meta.accounts ?? []) {
-      const res = await client.json<{ values: { key: string; name: string }[] }>(conn, `${site(s.id)}/project/search?maxResults=100&orderBy=name`)
+      const res = await client.json<{ values: { key: string; name: string }[] }>(conn, `${site(conn, s.id)}/project/search?maxResults=100&orderBy=name`)
       for (const p of res.values) {
         boards.push({ id: ref.make(s.id, p.key), name: p.key, project: p.name, account: s.name, url: s.url ? `${s.url}/browse/${p.key}` : null })
       }
@@ -167,7 +213,7 @@ export const jira: Connector = {
 
   async listColumns(conn, boardId) {
     const [cloud, key] = ref.parse(boardId, 2, 'project Jira')
-    const types = await client.json<{ statuses: { id: string; name: string }[] }[]>(conn, `${site(cloud)}/project/${encodeURIComponent(key)}/statuses`)
+    const types = await client.json<{ statuses: { id: string; name: string }[] }[]>(conn, `${site(conn, cloud)}/project/${encodeURIComponent(key)}/statuses`)
     const seen = new Map<string, string>()
     for (const t of types) for (const s of t.statuses) if (!seen.has(s.id)) seen.set(s.id, s.name)
     return [...seen].map<Column>(([id, name]) => ({ id: ref.make(cloud, key, id), title: name, cardsCount: -1 }))
@@ -177,7 +223,7 @@ export const jira: Connector = {
     const [cloud, key] = ref.parse(boardId, 2, 'project Jira')
     const status = filter?.columnId ? ref.parse(filter.columnId, 3, 'kolom Jira')[2] : null
     const jql = `project = "${key.replace(/"/g, '')}"${status ? ` AND status = ${Number(status)}` : ''} ORDER BY updated DESC`
-    const res = await client.json<{ issues: JIssue[] }>(conn, `${site(cloud)}/search/jql`, {
+    const res = await client.json<{ issues: JIssue[] }>(conn, `${site(conn, cloud)}/search/jql`, {
       method: 'POST',
       json: { jql, fields: ['summary', 'status'], maxResults: 100 },
     })
@@ -195,7 +241,7 @@ export const jira: Connector = {
     const [cloud, key] = ref.parse(cardId, 2, 'issue Jira')
     const i = await client.json<JIssue>(
       conn,
-      `${site(cloud)}/issue/${encodeURIComponent(key)}?fields=summary,description,status,project,subtasks,comment`,
+      `${site(conn, cloud)}/issue/${encodeURIComponent(key)}?fields=summary,description,status,project,subtasks,comment`,
     )
     const base = siteUrl(conn, cloud)
     return {
@@ -238,7 +284,7 @@ export const jira: Connector = {
     const [cloud, key] = ref.parse(cardId, 2, 'issue Jira')
     const form = new FormData()
     form.append('file', new Blob([new Uint8Array(file.data)], { type: file.mime }), file.name)
-    const res = await client.json<{ filename: string }[]>(conn, `${site(cloud)}/issue/${encodeURIComponent(key)}/attachments`, {
+    const res = await client.json<{ filename: string }[]>(conn, `${site(conn, cloud)}/issue/${encodeURIComponent(key)}/attachments`, {
       method: 'POST',
       body: form,
       headers: { 'X-Atlassian-Token': 'no-check' },
@@ -248,7 +294,7 @@ export const jira: Connector = {
 
   async postReport(conn, cardId, adf) {
     const [cloud, key] = ref.parse(cardId, 2, 'issue Jira')
-    const c = await client.json<{ id: string }>(conn, `${site(cloud)}/issue/${encodeURIComponent(key)}/comment`, {
+    const c = await client.json<{ id: string }>(conn, `${site(conn, cloud)}/issue/${encodeURIComponent(key)}/comment`, {
       method: 'POST',
       json: { body: JSON.parse(adf) },
     })
@@ -258,7 +304,7 @@ export const jira: Connector = {
 
   async updateReport(conn, posted, adf) {
     const [cloud, key, id] = ref.parse(posted.commentId, 3, 'komentar Jira')
-    await client.json(conn, `${site(cloud)}/issue/${encodeURIComponent(key)}/comment/${encodeURIComponent(id)}`, {
+    await client.json(conn, `${site(conn, cloud)}/issue/${encodeURIComponent(key)}/comment/${encodeURIComponent(id)}`, {
       method: 'PUT',
       json: { body: JSON.parse(adf) },
     })
@@ -270,11 +316,11 @@ export const jira: Connector = {
       const [cloud, key] = ref.parse(s, 2, 'sub-task Jira')
       const t = await client.json<{ transitions: { id: string; to: { statusCategory: { key: string } } }[] }>(
         conn,
-        `${site(cloud)}/issue/${encodeURIComponent(key)}/transitions`,
+        `${site(conn, cloud)}/issue/${encodeURIComponent(key)}/transitions`,
       )
       const tr = t.transitions.find((x) => x.to?.statusCategory?.key === 'done')
-      if (!tr) throw new Error(`Tidak ada transisi ke Done untuk ${key}`)
-      await client.json(conn, `${site(cloud)}/issue/${encodeURIComponent(key)}/transitions`, {
+      if (!tr) throw new Error(`No transition to Done for ${key}`)
+      await client.json(conn, `${site(conn, cloud)}/issue/${encodeURIComponent(key)}/transitions`, {
         method: 'POST',
         json: { transition: { id: tr.id } },
         okStatus: [204],

@@ -19,7 +19,7 @@ export function browserEnabled() {
 }
 
 async function call(path: string, body: object, timeoutMs: number): Promise<Buffer> {
-  if (!browserEnabled()) throw new HttpError(503, 'browser_disabled', 'BROWSER_DRIVER=none')
+  if (!browserEnabled()) throw new HttpError(503, 'browser_disabled', 'browserDisabled')
   let res: Response
   try {
     res = await fetch(`${env.browserWorkerUrl}${path}`, {
@@ -29,9 +29,9 @@ async function call(path: string, body: object, timeoutMs: number): Promise<Buff
       signal: AbortSignal.timeout(timeoutMs),
     })
   } catch (err) {
-    throw new HttpError(503, 'browser_unreachable', `Worker browser tidak bisa dihubungi di ${env.browserWorkerUrl}: ${(err as Error).message}`)
+    throw new HttpError(503, 'browser_unreachable', 'browserUnreachable', undefined, { url: env.browserWorkerUrl, detail: (err as Error).message })
   }
-  if (!res.ok) throw new Error(`Worker ${path} gagal (${res.status}): ${(await res.text()).slice(0, 300)}`)
+  if (!res.ok) throw new Error(`Worker ${path} failed (${res.status}): ${(await res.text()).slice(0, 300)}`)
   return Buffer.from(await res.arrayBuffer())
 }
 
@@ -60,15 +60,15 @@ export async function assertScreenshotUrl(raw: string) {
   try {
     u = new URL(raw)
   } catch {
-    throw new HttpError(400, 'invalid_url', `URL tidak valid: ${raw}`)
+    throw new HttpError(400, 'invalid_url', 'invalidUrl', undefined, { url: raw })
   }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new HttpError(400, 'invalid_url', 'Hanya http/https')
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new HttpError(400, 'invalid_url', 'httpOnly')
   if (!env.isCloud) return
   const host = u.hostname.replace(/^\[|\]$/g, '')
   const addrs = net.isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => [])
-  if (!addrs.length) throw new HttpError(400, 'invalid_url', `Host tidak ditemukan: ${host}`)
+  if (!addrs.length) throw new HttpError(400, 'invalid_url', 'hostNotFound', undefined, { host })
   if (addrs.some((a) => isPrivateAddress(a.address))) {
-    throw new HttpError(400, 'private_url', 'Mode cloud hanya bisa mengambil screenshot dari URL publik')
+    throw new HttpError(400, 'private_url', 'privateUrlShot')
   }
 }
 

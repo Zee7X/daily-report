@@ -21,8 +21,8 @@ const KeyInput = z
     baseUrl: z.string().trim().max(500).optional(),
     label: z.string().trim().max(60).optional(),
   })
-  .refine((v) => v.provider === 'custom' || v.apiKey.length >= 10, { message: 'API key wajib diisi', path: ['apiKey'] })
-  .refine((v) => v.provider !== 'custom' || Boolean(v.baseUrl), { message: 'Base URL wajib diisi', path: ['baseUrl'] })
+  .refine((v) => v.provider === 'custom' || v.apiKey.length >= 10, { message: 'apiKeyRequired', path: ['apiKey'] })
+  .refine((v) => v.provider !== 'custom' || Boolean(v.baseUrl), { message: 'baseUrlRequired', path: ['baseUrl'] })
 
 // POST /api/ai — simpan API key / endpoint sendiri (diperiksa dulu ke provider)
 export const POST = api(async (req, { user }) => {
@@ -30,9 +30,9 @@ export const POST = api(async (req, { user }) => {
   const baseUrl = input.provider === 'custom' ? normalizeBaseUrl(input.baseUrl!) : null
   if (baseUrl) await assertAiBaseUrl(baseUrl)
   const model = input.model || DEFAULT_MODEL[input.provider]
-  if (!model) throw new HttpError(400, 'model_required', 'Pilih atau isi nama model')
+  if (!model) throw new HttpError(400, 'model_required', 'modelRequired')
   if (!(await verifyAiKey(input.provider, input.apiKey, baseUrl).catch((e) => (e instanceof HttpError ? Promise.reject(e) : false)))) {
-    throw new HttpError(400, 'invalid_key', 'API key ditolak oleh provider')
+    throw new HttpError(400, 'invalid_key', 'keyRejectedProvider')
   }
   const label = input.provider === 'custom' ? input.label || `${LABEL.custom} · ${new URL(baseUrl!).host}` : LABEL[input.provider]
   await saveAiSetting(user.id, { provider: input.provider, apiKey: input.apiKey, model, label, baseUrl })

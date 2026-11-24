@@ -22,7 +22,7 @@ export function NewReportForm({ templates, providers, destinations, aiOn, today 
   const router = useRouter()
   const connected = providers.filter((p) => p.connected)
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? '')
-  const [title, setTitle] = useState(`${templates[0]?.name ?? 'Laporan'} — ${today}`)
+  const [title, setTitle] = useState(`${templates[0]?.name ?? t.newReport.fallbackTitle} — ${today}`)
   const [titleTouched, setTitleTouched] = useState(false)
   const [sourceMode, setSourceMode] = useState<'cards' | 'write'>(connected.length ? 'cards' : 'write')
   const [provider, setProvider] = useState(connected[0]?.id ?? '')

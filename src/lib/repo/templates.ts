@@ -23,7 +23,7 @@ const map = (r: Row): Template => ({
   updatedAt: r.updated_at,
 })
 
-const DEFAULTS: Omit<Template, 'id' | 'updatedAt'>[] = [
+const DEFAULTS_ID: Omit<Template, 'id' | 'updatedAt'>[] = [
   {
     name: 'Progres modul',
     kind: 'module_progress',
@@ -63,10 +63,50 @@ const DEFAULTS: Omit<Template, 'id' | 'updatedAt'>[] = [
   },
 ]
 
-export async function listTemplates(userId: string): Promise<Template[]> {
+const DEFAULTS_EN: Omit<Template, 'id' | 'updatedAt'>[] = [
+  {
+    name: 'Module progress',
+    kind: 'module_progress',
+    sections: [
+      { title: 'Done', hint: 'Features/fixes that are working, one point per change.' },
+      { title: 'In progress', hint: 'What is still underway, with a rough estimate of the remaining work.' },
+      { title: 'Blockers and notes', hint: 'Blockers, decisions needed, or anything worth knowing.' },
+      { title: 'Ready for QA', hint: 'Pages/menus QA can check right away.' },
+    ],
+    rules: {
+      tone: 'Clear and brief English. Active sentences, no filler.',
+      rules: [
+        'One point covers one verifiable change.',
+        'Name pages and menus exactly as they appear in the app.',
+        'Refer to images as (Figure N).',
+        'Never write passwords, tokens, or any credentials.',
+      ],
+      intro: "Hi, here's today's module progress:",
+      closing: 'Thanks.',
+    },
+  },
+  {
+    name: 'Staging tracking',
+    kind: 'staging_tracking',
+    sections: [
+      { title: 'On staging', hint: 'Features already deployed to staging.' },
+      { title: 'Not deployed yet', hint: 'Features finished locally but not yet pushed up.' },
+      { title: 'Needs QA check', hint: 'Suggested test scenarios.' },
+      { title: 'Deploy notes', hint: 'Migrations, configuration, or deploy order.' },
+    ],
+    rules: {
+      tone: 'Concise and factual, suited for QA and PMs.',
+      rules: ['Group by module.', 'Refer to images as (Figure N).', 'Never write credentials.'],
+      intro: 'Staging tracking update:',
+      closing: '',
+    },
+  },
+]
+
+export async function listTemplates(userId: string, locale: 'id' | 'en' = 'en'): Promise<Template[]> {
   let rows = await query<Row>('SELECT * FROM templates WHERE user_id = ? ORDER BY created_at, name', [userId])
   if (rows.length === 0) {
-    for (const t of DEFAULTS) await createTemplate(userId, t)
+    for (const t of locale === 'id' ? DEFAULTS_ID : DEFAULTS_EN) await createTemplate(userId, t)
     rows = await query<Row>('SELECT * FROM templates WHERE user_id = ? ORDER BY created_at, name', [userId])
   }
   return rows.map(map)

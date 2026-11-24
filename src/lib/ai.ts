@@ -46,10 +46,10 @@ export function normalizeBaseUrl(raw: string): string {
   try {
     u = new URL(raw.trim())
   } catch {
-    throw new HttpError(400, 'invalid_base_url', 'Base URL tidak valid')
+    throw new HttpError(400, 'invalid_base_url', 'baseUrlInvalid')
   }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new HttpError(400, 'invalid_base_url', 'Base URL harus http/https')
-  if (u.username || u.password) throw new HttpError(400, 'invalid_base_url', 'Jangan taruh kredensial di URL; isi di kolom API key')
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new HttpError(400, 'invalid_base_url', 'baseUrlScheme')
+  if (u.username || u.password) throw new HttpError(400, 'invalid_base_url', 'baseUrlCreds')
   u.search = ''
   u.hash = ''
   const path = u.pathname.replace(/\/+$/, '').replace(/\/chat\/completions$/, '')
@@ -61,12 +61,12 @@ export function normalizeBaseUrl(raw: string): string {
 export async function assertAiBaseUrl(base: string) {
   if (!env.isCloud) return
   const u = new URL(base)
-  if (u.protocol !== 'https:') throw new HttpError(400, 'invalid_base_url', 'Di versi online, endpoint harus https')
+  if (u.protocol !== 'https:') throw new HttpError(400, 'invalid_base_url', 'baseUrlHttps')
   const host = u.hostname.replace(/^\[|\]$/g, '')
   const addrs = net.isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => [])
-  if (!addrs.length) throw new HttpError(400, 'invalid_base_url', `Host tidak ditemukan: ${host}`)
+  if (!addrs.length) throw new HttpError(400, 'invalid_base_url', 'hostNotFound', undefined, { host })
   if (addrs.some((a) => isPrivateAddress(a.address))) {
-    throw new HttpError(400, 'private_url', 'Versi online tidak bisa memakai localhost/jaringan privat. Pakai URL publik 9Router (VPS, Hugging Face, atau tunnel).')
+    throw new HttpError(400, 'private_url', 'privateUrlAi')
   }
 }
 
@@ -81,10 +81,10 @@ export async function listCustomModels(baseUrl: string, apiKey: string): Promise
   try {
     res = await fetch(`${baseUrl}/models`, { headers: customHeaders(apiKey), redirect: 'manual', signal: AbortSignal.timeout(15_000) })
   } catch (err) {
-    throw new HttpError(502, 'ai_unreachable', `Endpoint tidak bisa dihubungi: ${(err as Error).message}`)
+    throw new HttpError(502, 'ai_unreachable', 'endpointUnreachable', undefined, { detail: (err as Error).message })
   }
-  if (res.status === 401 || res.status === 403) throw new HttpError(400, 'invalid_key', 'API key ditolak oleh endpoint')
-  if (!res.ok) throw new HttpError(502, 'ai_error', `Endpoint menjawab ${res.status}`)
+  if (res.status === 401 || res.status === 403) throw new HttpError(400, 'invalid_key', 'keyRejectedEndpoint')
+  if (!res.ok) throw new HttpError(502, 'ai_error', 'endpointStatus', undefined, { status: res.status })
   const data = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] }
   return (data.data ?? [])
     .map((m) => m.id)
@@ -116,7 +116,7 @@ const OPENAI_COMPAT: Record<'openai' | 'openrouter', string> = {
 
 function endpoint(cfg: AiConfig): string {
   if (cfg.provider === 'custom') {
-    if (!cfg.baseUrl) throw new Error('Base URL AI belum diisi')
+    if (!cfg.baseUrl) throw new Error('AI Base URL is not set')
     return `${cfg.baseUrl}/chat/completions`
   }
   return OPENAI_COMPAT[cfg.provider as 'openai' | 'openrouter']
@@ -135,7 +135,7 @@ export async function completeJson(cfg: AiConfig, system: string, user: string):
     const data = (await res.json()) as { content: { type: string; text?: string }[] }
     return data.content.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('')
   }
-  if (!cfg.model) throw new Error('Model AI belum dipilih')
+  if (!cfg.model) throw new Error('AI model is not selected')
   if (cfg.provider === 'custom') await assertAiBaseUrl(cfg.baseUrl ?? '')
   const res = await fetch(endpoint(cfg), {
     method: 'POST',
@@ -179,6 +179,6 @@ export async function verifyAiKey(provider: AiProvider, apiKey: string, baseUrl?
 export function extractJson(text: string): unknown {
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
-  if (start < 0 || end <= start) throw new Error('Jawaban AI tidak berisi JSON')
+  if (start < 0 || end <= start) throw new Error('The AI reply contains no JSON')
   return JSON.parse(text.slice(start, end + 1))
 }

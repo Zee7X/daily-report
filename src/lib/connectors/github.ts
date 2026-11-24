@@ -3,6 +3,7 @@ import { env } from '../env'
 import type { Connection } from '../repo/connections'
 import { renderMarkdown } from '../report/render'
 import { createClient, oauthToken, ref } from './http'
+import { probe } from './token'
 import type { Board, Card, CardDetail, Connector, Step } from './types'
 
 // GitHub Issues: repository → Open/Closed → issue. Step = task list "- [ ]" di deskripsi issue.
@@ -47,11 +48,32 @@ export const github: Connector = {
   setup: {
     url: 'https://github.com/settings/applications/new',
     env: ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'],
-    steps: ['Register a new OAuth App', 'Isi Authorization callback URL dengan Redirect URI di bawah', 'Generate client secret, salin keduanya ke environment'],
+    steps: ['Register a new OAuth App', 'Set the Authorization callback URL to the Redirect URI below', 'Generate a client secret and copy both into the environment'],
   },
 
   isConfigured: () => Boolean(ID() && SECRET()),
   redirectUri: () => `${env.authUrl}/api/connectors/github/callback`,
+
+  tokenAuth: {
+    help: 'https://github.com/settings/personal-access-tokens/new',
+    fields: [{ name: 'token', label: 'Personal access token', type: 'password' }],
+    async verify({ token }) {
+      const me = await probe<{ id: number; login: string; name: string | null }>('GitHub', `${API()}/user`, {
+        headers: { Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' },
+      })
+      return {
+        connection: {
+          accountId: String(me.id),
+          accountName: me.name || me.login,
+          accessToken: token,
+          refreshToken: null,
+          expiresAt: null,
+          meta: { auth: 'token', accounts: [{ id: String(me.id), name: me.login }] },
+        },
+        identity: { email: `${me.login}@users.noreply.github.com`, name: me.name || me.login, verified: false },
+      }
+    },
+  },
 
   authorizeUrl(state) {
     const qs = new URLSearchParams({

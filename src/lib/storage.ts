@@ -17,7 +17,7 @@ const DEFAULT_TTL = 60 * 60 // 1 jam
 
 export function assertSafeKey(key: string) {
   if (!/^[A-Za-z0-9/_.-]+$/.test(key) || key.includes('..') || key.startsWith('/')) {
-    throw new Error('Storage key tidak valid')
+    throw new Error('Invalid storage key')
   }
 }
 
@@ -27,7 +27,7 @@ class LocalStorage implements Storage {
   private file(key: string) {
     assertSafeKey(key)
     const p = path.resolve(this.root, key)
-    if (!p.startsWith(this.root + path.sep)) throw new Error('Storage key tidak valid')
+    if (!p.startsWith(this.root + path.sep)) throw new Error('Invalid storage key')
     return p
   }
 
@@ -78,7 +78,7 @@ class S3Storage implements Storage {
     assertSafeKey(key)
     const { GetObjectCommand } = await import('@aws-sdk/client-s3')
     const out = await (await this.clientPromise).send(new GetObjectCommand({ Bucket: env.s3.bucket, Key: key }))
-    if (!out.Body) throw new Error('File tidak ditemukan')
+    if (!out.Body) throw new Error('File not found')
     return Buffer.from(await out.Body.transformToByteArray())
   }
 
@@ -114,7 +114,7 @@ class VercelBlobStorage implements Storage {
     assertSafeKey(key)
     const { get } = await import('@vercel/blob')
     const res = await get(key, { access: 'private' })
-    if (!res || res.statusCode !== 200 || !res.stream) throw new Error('File tidak ditemukan')
+    if (!res || res.statusCode !== 200 || !res.stream) throw new Error('File not found')
     return Buffer.from(await new Response(res.stream).arrayBuffer())
   }
 
