@@ -99,7 +99,7 @@ Claude tetap dipakai untuk testing dan merangkum hasilnya; Daily Report mengambi
 - **Sumber bahan**: kartu kanban (deskripsi, step, komentar) atau tulisan sendiri. Tanpa kanban, laporan tetap bisa dibuat penuh.
 - **Kanban satu klik**: Basecamp, Trello, Jira, GitHub Issues, Linear, dan ClickUp. Token dienkripsi AES-256-GCM dan diperbarui otomatis. Disconnect menghapus token.
 - **Pilih kartu** dengan menelusuri board → kolom → kartu, atau menempel URL kartu. Kartu sumber dan tujuan boleh berbeda.
-- **AI satu klik**: "Connect OpenRouter" (Claude, GPT, Gemini, DeepSeek; biaya ke saldo pengguna sendiri), atau tempel API key Anthropic/OpenAI. Tanpa AI, draf disusun dari step kartu dan catatanmu.
+- **AI satu klik**: "Connect OpenRouter" (Claude, GPT, Gemini, DeepSeek; biaya ke saldo pengguna sendiri), tempel API key Anthropic/OpenAI, atau hubungkan **9Router** / endpoint OpenAI-compatible lain (LiteLLM, Ollama, vLLM) dengan base URL. Tanpa AI, draf disusun dari step kartu dan catatanmu.
 - **Penyamaran kredensial**: teks mirip password/token disamarkan sebelum masuk draf maupun prompt AI.
 - **Editor**: centang bagian/poin/gambar (yang tidak dicentang tidak ikut), edit teks, ubah urutan, tempel gambar ke poin. Tersimpan otomatis.
 - **Gambar**: upload PNG/JPG (maks. 10 MB) atau screenshot dari daftar URL (default 1440×900). Urutkan dengan drag; nomor "Gambar N" menyesuaikan otomatis.
@@ -110,6 +110,16 @@ Claude tetap dipakai untuk testing dan merangkum hasilnya; Daily Report mengambi
 - **Format salin**: WhatsApp (`*tebal*`, bullet `•`), Slack (mrkdwn), Teams (rich text + teks biasa), HTML dengan gambar, Markdown, PDF, dan tampilan cetak.
 - **Riwayat** laporan dengan status dan tautan. Diff draf awal vs versi terkirim disimpan untuk analisis pola edit.
 - UI **Indonesia / English**, navigasi keyboard, kontras WCAG AA.
+
+### AI lewat 9Router
+
+[9Router](https://github.com/decolua/9router) menyediakan endpoint OpenAI-compatible (`/v1/chat/completions`) yang meneruskan ke langganan atau model gratis/murah. Di halaman Koneksi → AI → *Pakai API key sendiri* → **9Router / custom**:
+
+1. Isi **Base URL**, mis. `http://localhost:20128/v1` (mode lokal) atau URL publik 9Router-mu (mode online).
+2. Isi **API key** dari dashboard 9Router.
+3. Klik **Muat model**, pilih model atau combo (mis. `kr/claude-sonnet-4.5`), lalu **Simpan & tes**.
+
+Versi online (Vercel) tidak bisa membuka `localhost` di komputermu. Untuk memakai 9Router dari versi online, jalankan 9Router di server yang bisa diakses lewat https (VPS, Hugging Face Space, atau tunnel). Alamat localhost dan jaringan privat ditolak di mode cloud. Base URL dan API key disimpan terenkripsi; browser hanya melihat host dan 4 karakter terakhir key.
 
 ### Connector kanban
 

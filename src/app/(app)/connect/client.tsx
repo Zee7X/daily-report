@@ -303,29 +303,90 @@ export function WebhooksManager({ initial, cloud, oneClick }: { initial: PublicD
   )
 }
 
+function ModelPicker({
+  value,
+  onChange,
+  presets,
+  models,
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  presets: { id: string; label: string }[]
+  models: string[] | null
+  placeholder: string
+}) {
+  const options = models ? models.map((id) => ({ id, label: id })) : presets
+  if (!options.length) {
+    return <input className="input mono" required placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+  }
+  const known = options.some((o) => o.id === value)
+  return (
+    <select className="select" value={known ? value : ''} onChange={(e) => onChange(e.target.value)} required>
+      {!known && <option value="">{value || '—'}</option>}
+      {options.map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 export function AiPanel({
   initial,
   builtIn,
   presets,
+  cloud,
 }: {
   initial: PublicAiSetting | null
   builtIn: boolean
   presets: Record<AiProvider, { id: string; label: string }[]>
+  cloud: boolean
 }) {
   const { t } = useI18n()
   const [setting, setSetting] = useState(initial)
-  const [provider, setProvider] = useState<AiProvider>('anthropic')
+  const [provider, setProvider] = useState<AiProvider>('custom')
   const [apiKey, setApiKey] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
   const [model, setModel] = useState('')
+  const [models, setModels] = useState<string[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
+
+  const loadModels = async (body: { baseUrl?: string; apiKey?: string }) => {
+    setMsg(null)
+    setBusy(true)
+    try {
+      const r = await api<{ models: string[] }>('/api/ai/models', { method: 'POST', json: body })
+      setModels(r.models)
+      if (!model && r.models[0]) setModel(r.models[0])
+      setMsg({ text: `${r.models.length} ${t.integrations.aiModelsFound}` })
+    } catch (err) {
+      setMsg({ text: (err as Error).message, bad: true })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Endpoint custom yang sudah tersimpan: muat daftar modelnya untuk pilihan ganti model.
+  useEffect(() => {
+    if (setting?.provider === 'custom') {
+      api<{ models: string[] }>('/api/ai/models', { method: 'POST', json: {} })
+        .then((r) => setModels(r.models))
+        .catch(() => setModels(null))
+    }
+  }, [setting?.provider])
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
     setMsg(null)
     try {
-      const r = await api<{ setting: PublicAiSetting }>('/api/ai', { method: 'POST', json: { provider, apiKey, model: model || undefined } })
+      const r = await api<{ setting: PublicAiSetting }>('/api/ai', {
+        method: 'POST',
+        json: { provider, apiKey, model: model || undefined, baseUrl: provider === 'custom' ? baseUrl : undefined },
+      })
       setSetting(r.setting)
       setApiKey('')
       setMsg({ text: t.integrations.aiSaved })
@@ -349,32 +410,29 @@ export function AiPanel({
   const disconnect = async () => {
     await api('/api/ai', { method: 'DELETE' })
     setSetting(null)
+    setModels(null)
   }
 
   if (setting) {
-    const list = presets[setting.provider] ?? []
-    const known = list.some((p) => p.id === setting.model)
     return (
       <div className="stack" style={{ gap: 12 }}>
         <div className="row between">
           <strong>{setting.label}</strong>
           <span className="tag ok">{t.integrations.connected}</span>
         </div>
-        <p className="small mono">{setting.keyHint}</p>
+        <p className="small mono">
+          {setting.host ? `${setting.host} · ` : ''}
+          {setting.keyHint}
+        </p>
         <label className="field">
           <span>{t.integrations.aiModel}</span>
-          {list.length ? (
-            <select className="select" value={known ? setting.model : '__custom'} onChange={(e) => e.target.value !== '__custom' && changeModel(e.target.value)}>
-              {list.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-              {!known && <option value="__custom">{setting.model}</option>}
-            </select>
-          ) : (
-            <input className="input mono" defaultValue={setting.model} onBlur={(e) => e.target.value !== setting.model && changeModel(e.target.value)} />
-          )}
+          <ModelPicker
+            value={setting.model}
+            onChange={changeModel}
+            presets={presets[setting.provider] ?? []}
+            models={setting.provider === 'custom' ? models : null}
+            placeholder={t.integrations.aiModelCustom}
+          />
         </label>
         {msg && <p className={`notice ${msg.bad ? 'bad' : 'ok'}`}>{msg.text}</p>}
         <div className="row push">
@@ -385,6 +443,13 @@ export function AiPanel({
       </div>
     )
   }
+
+  const providers: { id: AiProvider; label: string }[] = [
+    { id: 'custom', label: t.integrations.aiCustom },
+    { id: 'anthropic', label: 'Anthropic' },
+    { id: 'openai', label: 'OpenAI' },
+    { id: 'openrouter', label: 'OpenRouter key' },
+  ]
 
   return (
     <div className="stack" style={{ gap: 12 }}>
@@ -400,42 +465,70 @@ export function AiPanel({
           {t.integrations.aiPaste}
         </summary>
         <form className="stack" style={{ marginTop: 10 }} onSubmit={save}>
-          <div className="seg" role="group" aria-label={t.integrations.aiProvider}>
-            {(['anthropic', 'openai', 'openrouter'] as AiProvider[]).map((p) => (
+          <div className="seg" role="group" aria-label={t.integrations.aiProvider} style={{ flexWrap: 'wrap' }}>
+            {providers.map((p) => (
               <button
-                key={p}
+                key={p.id}
                 type="button"
-                aria-pressed={provider === p}
+                aria-pressed={provider === p.id}
                 onClick={() => {
-                  setProvider(p)
+                  setProvider(p.id)
                   setModel('')
+                  setModels(null)
+                  setMsg(null)
                 }}
               >
-                {p}
+                {p.label}
               </button>
             ))}
           </div>
+          {provider === 'custom' && (
+            <>
+              <p className="small">{t.integrations.aiCustomHelp}</p>
+              <label className="field">
+                <span>{t.integrations.aiBaseUrl}</span>
+                <input
+                  className="input mono"
+                  type="url"
+                  required
+                  placeholder={cloud ? 'https://9router.example.com/v1' : 'http://localhost:20128/v1'}
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  autoComplete="off"
+                />
+              </label>
+              <p className="small">{cloud ? t.integrations.aiBaseUrlHintCloud : t.integrations.aiBaseUrlHintLocal}</p>
+            </>
+          )}
           <label className="field">
-            <span>{t.integrations.aiKey}</span>
-            <input className="input mono" type="password" required autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+            <span>{provider === 'custom' ? t.integrations.aiKeyOptional : t.integrations.aiKey}</span>
+            <input
+              className="input mono"
+              type="password"
+              required={provider !== 'custom'}
+              autoComplete="off"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
           </label>
           <label className="field">
             <span>{t.integrations.aiModel}</span>
-            {presets[provider].length ? (
-              <select className="select" value={model} onChange={(e) => setModel(e.target.value)}>
-                {presets[provider].map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input className="input mono" required placeholder={t.integrations.aiModelCustom} value={model} onChange={(e) => setModel(e.target.value)} />
-            )}
+            <ModelPicker
+              value={model}
+              onChange={setModel}
+              presets={presets[provider]}
+              models={provider === 'custom' ? models : null}
+              placeholder={t.integrations.aiModelCustom}
+            />
           </label>
           {msg && <p className={`notice ${msg.bad ? 'bad' : 'ok'}`}>{msg.text}</p>}
           <div className="row">
-            <button className="btn" type="submit" disabled={busy || !apiKey}>
+            {provider === 'custom' && (
+              <button type="button" className="btn" disabled={busy || !baseUrl} onClick={() => loadModels({ baseUrl, apiKey })}>
+                {t.integrations.aiLoadModels}
+              </button>
+            )}
+            <button className="btn primary" type="submit" disabled={busy || (provider !== 'custom' && !apiKey) || (provider === 'custom' && !baseUrl)}>
               {busy ? t.common.saving : t.integrations.aiSave}
             </button>
           </div>
