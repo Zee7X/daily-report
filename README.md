@@ -187,7 +187,8 @@ Untuk pengembangan, pakai `npm run dev` sebagai ganti `build && start`. Worker b
 | `APP_MODE` | `local` atau `cloud` |
 | `APP_URL` | URL publik aplikasi |
 | `AUTH_URL` | opsional: domain khusus login dan OAuth (lihat bagian Vercel) |
-| `SIGNUP_ALLOWED_EMAILS` | email atau `@domain` yang boleh mendaftar; kosong = hanya akun pertama |
+| `SIGNUP_ALLOWED_EMAILS` | `*` = siapa saja, atau email/`@domain` dipisah koma; kosong = hanya akun pertama |
+| `QUOTA_AI_PER_DAY`, `QUOTA_REPORTS_PER_DAY`, `QUOTA_JOBS_PER_HOUR`, `QUOTA_STORAGE_MB` | kuota per pengguna; default 30, 50, 60, 200 |
 | `SINGLE_USER` | `true` = tanpa halaman login (hanya mode lokal) |
 | `DATABASE_URL` | `mysql://user:pass@host:port/db` (MySQL 8 atau TiDB) |
 | `DATABASE_SSL` | otomatis `true` untuk host `tidbcloud.com` |
@@ -238,7 +239,7 @@ TLS aktif otomatis untuk host `tidbcloud.com`.
 | `AUTH_URL` | domain `.vercel.app` project-mu, mis. `https://daily-report.vercel.app` |
 | `DATABASE_URL` | dari langkah 1 |
 | `ENCRYPTION_KEY` | hasil `npm run gen:key` (simpan baik-baik) |
-| `SIGNUP_ALLOWED_EMAILS` | email yang boleh mendaftar, mis. `rizick076@gmail.com,@kantor.com`; kosong = hanya akun pertama |
+| `SIGNUP_ALLOWED_EMAILS` | `*` untuk semua orang, atau daftar email/`@domain`, mis. `rizick076@gmail.com,@kantor.com`; kosong = hanya akun pertama |
 | `BASECAMP_CLIENT_ID`, `BASECAMP_CLIENT_SECRET` | dari Launchpad |
 | `BASECAMP_USER_AGENT` | `Daily Report (email-kamu@example.com)` |
 | `AI_PROVIDER`, `AI_API_KEY` | opsional |
@@ -322,12 +323,17 @@ Implementasikan antarmuka `Connector` di `src/lib/connectors/types.ts` (OAuth, `
 - Di mode cloud, pesan error internal tidak dikirim ke browser.
 
 **Login dan sesi**
-- Password disimpan sebagai hash scrypt; percobaan login dibatasi 10 kali per 15 menit per email.
+- Password disimpan sebagai hash scrypt.
 - Cookie sesi ditandatangani HMAC, `HttpOnly`, `SameSite=Lax`, dan `Secure` di mode cloud. Logout membatalkan semua sesi pengguna di semua perangkat.
 - Mode tanpa login (`SINGLE_USER`) tidak pernah aktif di Vercel.
 - Domain login (`AUTH_URL`) tidak menyimpan sesi. Hasil login diserahkan ke `APP_URL` lewat token acak sekali pakai (60 detik, terikat domain tujuan) yang juga harus cocok dengan cookie nonce di browser yang memulai login. Link serah-terima milik orang lain tidak bisa dipakai.
 - OAuth Basecamp menyimpan state di server. Hasilnya baru dipakai di browser yang memulai alur, dan untuk "Connect" hanya oleh pengguna yang sama, jadi token Basecamp tidak bisa "dibelokkan" ke akun lain.
 - Email belum diverifikasi saat daftar dengan password (tidak ada SMTP). Bila pemilik asli email itu kemudian "Login with Basecamp", password yang dibuat orang lain dihapus dan semua sesinya dibatalkan. Untuk `SIGNUP_ALLOWED_EMAILS` berbasis domain (`@kantor.com`), sarankan pengguna memakai "Login with Basecamp".
+
+**Pendaftaran terbuka (`SIGNUP_ALLOWED_EMAILS=*`)**
+- Maksimal 5 pendaftaran per IP per hari, plus field jebakan untuk bot.
+- Login gagal dibatasi 10 kali per email dan 30 kali per IP dalam 15 menit, berlaku di semua instance (dicatat di database sebagai HMAC, bukan IP/email asli).
+- Kuota per pengguna: 30 draf AI per hari (setelah itu draf disusun tanpa AI), 50 laporan per hari, 60 posting/screenshot per jam, 10 tes webhook per jam, 200 MB gambar, 50 gambar per laporan. Semua bisa diubah lewat `QUOTA_*`.
 
 **Lainnya**
 - Request yang mengubah data dari Origin lain ditolak.

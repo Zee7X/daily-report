@@ -51,7 +51,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             {error}
           </p>
         )}
-        <LoginForm next={next} nonce={sp.n ?? ''} restricted={env.signupAllowed.length > 0} />
+        <LoginForm next={next} nonce={sp.n ?? ''} restricted={env.signupAllowed.length > 0 && !env.signupAllowed.includes('*')} />
       </section>
 
       <section className="cell span-6">

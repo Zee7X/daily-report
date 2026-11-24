@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { requireConnection } from '@/lib/connectors'
 import type { CardDetail } from '@/lib/connectors/types'
 import { api, HttpError } from '@/lib/http'
+import { aiEnabled } from '@/lib/ai'
+import { limits } from '@/lib/limits'
 import { composeDraft } from '@/lib/report/draft'
 import { resolveTarget, WEBHOOK } from '@/lib/report/targets'
 import { createReport, listReports } from '@/lib/repo/reports'
@@ -31,6 +33,7 @@ export const POST = api(async (req, { user }) => {
   const input = CreateInput.parse(await req.json())
   const template = await getTemplate(user.id, input.templateId)
   if (!template) throw new HttpError(404, 'template_not_found')
+  await limits.report(user.id)
 
   const details = new Map<string, CardDetail>()
   const fetchCard = async (ref: z.infer<typeof CardRef>) => {
@@ -50,7 +53,8 @@ export const POST = api(async (req, { user }) => {
       ? await resolveTarget(user, input.target)
       : await fetchCard(input.target).then((c) => ({ provider: input.target!.provider, cardId: c.id, cardUrl: c.url, cardTitle: c.title }))
 
-  const draft = await composeDraft({ template, sources, notes: input.notes, locale: user.locale })
+  const allowAi = aiEnabled() ? await limits.tryAi(user.id) : false
+  const draft = await composeDraft({ template, sources, notes: input.notes, locale: user.locale, allowAi })
 
   const id = await createReport({
     userId: user.id,

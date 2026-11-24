@@ -32,29 +32,16 @@ export async function verifyPassword(password: string, stored: string | null): P
   return valid && timingSafeEqual(actual, expected)
 }
 
-// ── pembatas percobaan login (per instance) ─────────────────────────────
-
-const attempts = new Map<string, number[]>()
-const WINDOW_MS = 15 * 60 * 1000
-const MAX_ATTEMPTS = 10
-
-export function tooManyAttempts(key: string): boolean {
-  const now = Date.now()
-  const list = (attempts.get(key) ?? []).filter((t) => now - t < WINDOW_MS)
-  attempts.set(key, list)
-  return list.length >= MAX_ATTEMPTS
-}
-
-export function recordFailure(key: string) {
-  attempts.set(key, [...(attempts.get(key) ?? []), Date.now()])
-}
-
 // ── siapa yang boleh membuat akun ───────────────────────────────────────
 
-/** SIGNUP_ALLOWED_EMAILS berisi email atau @domain. Bila kosong, hanya akun pertama (pemilik) yang boleh dibuat. */
+/**
+ * SIGNUP_ALLOWED_EMAILS: "*" = siapa saja boleh mendaftar (dengan pembatas laju dan kuota per pengguna),
+ * daftar email/@domain = hanya yang cocok, kosong = hanya akun pertama (pemilik).
+ */
 export async function canSignup(email: string): Promise<boolean> {
   const e = email.toLowerCase()
   const allow = env.signupAllowed
+  if (allow.includes('*')) return true
   if (allow.length) return allow.some((a) => (a.startsWith('@') ? e.endsWith(a) : e === a))
   const row = await one<{ n: number }>('SELECT COUNT(*) AS n FROM users WHERE email <> ?', [LOCAL_EMAIL])
   return Number(row?.n ?? 0) === 0

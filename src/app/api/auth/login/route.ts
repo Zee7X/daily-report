@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { handoffUrl, onAuthHost, recordFailure, safeNext, tooManyAttempts, verifyPassword } from '@/lib/auth'
+import { handoffUrl, onAuthHost, safeNext, verifyPassword } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { api, HttpError } from '@/lib/http'
+import { clientIp, limits } from '@/lib/limits'
 import { getPasswordHash } from '@/lib/repo/users'
 import { createSession } from '@/lib/session'
 
@@ -19,12 +20,14 @@ const Input = z.object({
 export const POST = api(
   async (req) => {
     const input = Input.parse(await req.json())
-    const key = `login:${input.email.toLowerCase()}`
-    if (tooManyAttempts(key)) throw new HttpError(429, 'too_many_attempts', 'Terlalu banyak percobaan. Coba lagi 15 menit lagi.')
+    const ip = await clientIp()
+    if (await limits.loginBlocked(input.email, ip)) {
+      throw new HttpError(429, 'too_many_attempts', 'Terlalu banyak percobaan. Coba lagi 15 menit lagi.')
+    }
     const found = await getPasswordHash(input.email)
     const ok = await verifyPassword(input.password, found?.hash ?? null)
     if (!found || !ok) {
-      recordFailure(key)
+      await limits.loginFailed(input.email, ip)
       throw new HttpError(401, 'invalid_credentials', 'Email atau password salah')
     }
     const next = safeNext(input.next)

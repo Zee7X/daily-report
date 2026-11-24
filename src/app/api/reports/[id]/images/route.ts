@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { assertScreenshotUrl, browserEnabled } from '@/lib/browser'
 import { api, HttpError } from '@/lib/http'
 import { enqueue } from '@/lib/jobs'
+import { limits } from '@/lib/limits'
 import { requireReport, toClientImages } from '@/lib/report/service'
 import { addImage, listImages, reorderImages } from '@/lib/repo/reports'
 import { storage } from '@/lib/storage'
@@ -40,6 +41,9 @@ export const POST = api<Ctx>(async (req, { params, user }) => {
     if (!browserEnabled()) throw new HttpError(503, 'browser_disabled')
     const input = ScreenshotInput.parse(await req.json())
     for (const url of input.urls) await assertScreenshotUrl(url)
+    await limits.imagesPerReport(report.id, input.urls.length)
+    await limits.storage(user.id, 0)
+    await limits.jobs(user.id, input.urls.length)
     const jobIds: string[] = []
     for (const url of input.urls) {
       jobIds.push(
@@ -67,6 +71,8 @@ export const POST = api<Ctx>(async (req, { params, user }) => {
     prepared.push({ name: f.name, mime, data })
   }
 
+  await limits.imagesPerReport(report.id, prepared.length)
+  await limits.storage(user.id, prepared.reduce((n, p) => n + p.data.length, 0))
   for (const p of prepared) {
     const imageId = randomUUID()
     const key = `reports/${report.id}/${imageId}.${p.mime === 'image/png' ? 'png' : 'jpg'}`

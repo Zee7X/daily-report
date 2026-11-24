@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { api, HttpError } from '@/lib/http'
 import { enqueue } from '@/lib/jobs'
+import { limits } from '@/lib/limits'
 import { requireReport } from '@/lib/report/service'
 import { activeJob } from '@/lib/repo/jobs'
 import { getTarget } from '@/lib/repo/reports'
@@ -34,6 +35,7 @@ export const POST = api<{ params: Promise<{ id: string }> }>(async (req, { param
     })
   }
 
+  await limits.jobs(user.id, 1)
   const jobId = await enqueue('post', {
     userId: user.id,
     reportId: report.id,
