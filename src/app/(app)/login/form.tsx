@@ -10,6 +10,7 @@ export function LoginForm({ next, nonce, restricted }: { next: string; nonce: st
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [website, setWebsite] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,7 +21,10 @@ export function LoginForm({ next, nonce, restricted }: { next: string; nonce: st
     try {
       const r = await api<{ redirect: string }>(mode === 'login' ? '/api/auth/login' : '/api/auth/signup', {
         method: 'POST',
-        json: mode === 'login' ? { email, password, next, n: nonce || undefined } : { name, email, password, next, n: nonce || undefined },
+        json:
+          mode === 'login'
+            ? { email, password, next, n: nonce || undefined }
+            : { name, email, password, next, n: nonce || undefined, website: website || undefined },
       })
       window.location.assign(r.redirect)
     } catch (err) {
@@ -61,6 +65,14 @@ export function LoginForm({ next, nonce, restricted }: { next: string; nonce: st
           onChange={(e) => setPassword(e.target.value)}
         />
       </label>
+      {mode === 'signup' && (
+        <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+          <label>
+            Website
+            <input tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+          </label>
+        </div>
+      )}
       {mode === 'signup' && <p className="small">{t.login.passwordHint}{restricted ? ` ${t.login.signupNote}` : ''}</p>}
       {error && (
         <p className="notice bad" role="alert">

@@ -20,6 +20,7 @@ import {
 } from '../repo/reports'
 import { getDestination } from '../repo/destinations'
 import { getUser } from '../repo/users'
+import { limits } from '../limits'
 import { storage } from '../storage'
 import { KIND_LABEL, sendWebhook, type WebhookImage } from '../webhooks'
 
@@ -53,6 +54,7 @@ const screenshotHandler: Handler = async (job) => {
   const report = await getReport(job.userId, p.reportId)
   if (!report) throw new Error('Laporan tidak ditemukan')
   const png = await screenshot(p.url, { width: p.width, height: p.height, fullPage: p.fullPage })
+  await limits.storage(job.userId, png.length)
   const id = randomUUID()
   const key = `reports/${report.id}/${id}.png`
   await storage().put(key, png, 'image/png')

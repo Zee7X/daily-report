@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { canSignup, handoffUrl, hashPassword, onAuthHost, safeNext } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { api, HttpError } from '@/lib/http'
+import { clientIp, limits } from '@/lib/limits'
 import { createUser, findUserByEmail } from '@/lib/repo/users'
 import { createSession } from '@/lib/session'
 
@@ -12,6 +13,8 @@ const Input = z.object({
   password: z.string().min(10, 'Password minimal 10 karakter').max(200),
   next: z.string().max(500).optional(),
   n: z.string().max(100).optional(),
+  /** Honeypot: field tersembunyi yang hanya diisi bot. */
+  website: z.string().max(200).optional(),
 })
 
 // POST /api/auth/signup — akun baru dengan email + password. Tidak butuh SMTP, jadi email belum terverifikasi;
@@ -20,10 +23,12 @@ const Input = z.object({
 export const POST = api(
   async (req) => {
     const input = Input.parse(await req.json())
+    if (input.website) throw new HttpError(400, 'invalid_input', 'Pendaftaran ditolak.')
     const split = await onAuthHost()
     if (split && !input.n) throw new HttpError(400, 'missing_nonce', 'Buka halaman login dari aplikasi lalu coba lagi.')
     if (await findUserByEmail(input.email)) throw new HttpError(409, 'email_taken', 'Email sudah terdaftar. Silakan masuk.')
     if (!(await canSignup(input.email))) throw new HttpError(403, 'signup_closed', 'Pendaftaran untuk email ini tidak dibuka.')
+    await limits.signup(await clientIp())
     const user = await createUser(input.email, input.name, { passwordHash: await hashPassword(input.password) })
     const next = safeNext(input.next)
     if (split) return NextResponse.json({ redirect: await handoffUrl(user.id, env.appUrl, next, input.n!) }, { status: 201 })
