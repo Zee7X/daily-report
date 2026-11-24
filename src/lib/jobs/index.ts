@@ -1,16 +1,21 @@
 import 'server-only'
+import { after } from 'next/server'
 import { env } from '../env'
 import { claimJob, failJob, finishJob, getJob, insertJob, MAX_ATTEMPTS, type Job, type JobType } from '../repo/jobs'
 import { handlers } from './handlers'
 
 // Antrean job (FR-9). Driver dipilih lewat QUEUE_DRIVER:
-//   local  → dijalankan di proses yang sama setelah response dikirim, retry dengan backoff
+//   local  → dijalankan di proses yang sama setelah response dikirim (next/server `after`, di Vercel
+//            memakai waitUntil sehingga fungsi tetap hidup sampai job selesai), retry dengan backoff
 //   qstash → Upstash QStash memanggil POST /api/jobs/:type, QStash yang mengulang bila gagal
 
 export async function enqueue(type: JobType, j: { userId: string; reportId: string | null; payload: object }) {
   const id = await insertJob({ ...j, type })
   if (env.queueDriver === 'qstash') await publishQstash(type, id)
-  else void runLocal(id)
+  else
+    after(async () => {
+      await runLocal(id)
+    })
   return id
 }
 

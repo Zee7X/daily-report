@@ -6,6 +6,9 @@ import { requireReport } from '@/lib/report/service'
 import { activeJob } from '@/lib/repo/jobs'
 import { getTarget } from '@/lib/repo/reports'
 
+// Job lokal berjalan lewat `after()` di fungsi ini, jadi batas durasinya ikut dinaikkan (Vercel).
+export const maxDuration = 300
+
 const Input = z.object({
   mode: z.enum(['new', 'update']).optional(),
   completeStepIds: z.array(z.string().max(128)).max(200).default([]),

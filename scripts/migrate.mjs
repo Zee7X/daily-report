@@ -18,7 +18,8 @@ if (!/^[A-Za-z0-9_]+$/.test(database)) {
   process.exit(1)
 }
 
-const ssl = process.env.DATABASE_SSL === 'true' ? { minVersion: 'TLSv1.2', rejectUnauthorized: true } : undefined
+const sslOn = (process.env.DATABASE_SSL || (/tidbcloud\.com/.test(url) ? 'true' : 'false')) === 'true'
+const ssl = sslOn ? { minVersion: 'TLSv1.2', rejectUnauthorized: true } : undefined
 const base = {
   host: parsed.hostname,
   port: Number(parsed.port || 3306),

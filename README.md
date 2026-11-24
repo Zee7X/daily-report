@@ -18,10 +18,10 @@ Satu repo Next.js, dua mode:
 | --- | --- | --- |
 | Aplikasi | `npm start` / `docker compose up` di `localhost:3000` | Vercel + domain pribadi |
 | Database | MySQL 8 (Docker) atau TiDB lokal | TiDB Cloud |
-| Storage | folder `./storage` | Cloudflare R2 (S3-compatible) |
-| Job queue | runner di proses yang sama | Upstash QStash |
+| Storage | folder `./storage` | Vercel Blob privat (atau Cloudflare R2) |
+| Job queue | runner di proses yang sama | runner di fungsi Vercel (`after()`), atau Upstash QStash |
 | Screenshot/PDF | worker Python Playwright di komputer sendiri, **termasuk `localhost`** | worker yang sama di Railway/Render/Fly, hanya URL publik |
-| Login | opsional (`SINGLE_USER=true`) | wajib, "Login with Basecamp" |
+| Login | opsional (`SINGLE_USER=true`) | wajib: email + password atau "Login with Basecamp", bisa di domain terpisah |
 
 Perbedaan mode hanya ada di `.env`.
 
@@ -79,6 +79,20 @@ Perbedaan mode hanya ada di `.env`.
 <img src="assets/screenshots/mobile.png" alt="Tampilan mobile" width="320" />
 
 </details>
+
+## Cara kerja
+
+Alur lama: agen AI di laptop mengetes fitur, lalu membuat HTML + PDF di `Pictures\Report\<MODUL>\`. Setelah itu teks masih diedit, disalin ke Basecamp, gambar dilampirkan ulang, dan subtask dicentang manual.
+
+Dengan Report Tool, pekerjaan setelah testing pindah ke satu halaman:
+
+1. **Bahan**: pilih kartu Basecamp (deskripsi, step, komentar dibaca otomatis), dan/atau tempel catatan sendiri. Ringkasan hasil testing dari Claude bisa langsung ditempel di sini, tidak perlu dijadikan HTML dulu.
+2. **Gambar**: upload screenshot hasil testing, atau ambil screenshot dari daftar URL. Mode lokal bisa memotret `localhost` (fitur yang belum di-deploy); mode cloud hanya URL publik, jadi screenshot localhost diupload.
+3. **Draf**: bahan disusun ke bagian-bagian template (Selesai, Sedang dikerjakan, Kendala, Siap diuji QA). Dengan API key AI, kalimatnya dirapikan AI; tanpa API key, poin diambil apa adanya.
+4. **Pilih**: centang poin dan gambar yang ikut, urutkan, tempel gambar ke poin. Yang tidak dicentang tidak terkirim.
+5. **Kirim**: *Post ke Basecamp* (gambar jadi lampiran asli, subtask bisa dicentang), kirim ke webhook (Discord/Slack/Teams/n8n), atau salin untuk WhatsApp. PDF tetap ada sebagai cadangan.
+
+Claude tetap dipakai untuk testing dan merangkum hasilnya; Report Tool mengambil alih bagian merapikan dan mengirim.
 
 ## Fitur
 
@@ -171,11 +185,13 @@ Untuk pengembangan, pakai `npm run dev` sebagai ganti `build && start`. Worker b
 | Variabel | Keterangan |
 | --- | --- |
 | `APP_MODE` | `local` atau `cloud` |
-| `APP_URL` | URL publik aplikasi (OAuth dan callback job) |
+| `APP_URL` | URL publik aplikasi |
+| `AUTH_URL` | opsional: domain khusus login dan OAuth (lihat bagian Vercel) |
+| `SIGNUP_ALLOWED_EMAILS` | email atau `@domain` yang boleh mendaftar; kosong = hanya akun pertama |
 | `SINGLE_USER` | `true` = tanpa halaman login (hanya mode lokal) |
 | `DATABASE_URL` | `mysql://user:pass@host:port/db` (MySQL 8 atau TiDB) |
-| `DATABASE_SSL` | `true` untuk TiDB Cloud |
-| `STORAGE_DRIVER` | `local` (`STORAGE_PATH`) atau `s3` (`S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`) |
+| `DATABASE_SSL` | otomatis `true` untuk host `tidbcloud.com` |
+| `STORAGE_DRIVER` | `local` (`STORAGE_PATH`), `vercel-blob` (store privat), atau `s3` (`S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`) |
 | `QUEUE_DRIVER` | `local` atau `qstash` (`QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`) |
 | `JOBS_SECRET` | Bearer token bila worker/cron memanggil `POST /api/jobs/:type` langsung |
 | `BROWSER_DRIVER` | `local-worker`, `remote-worker`, atau `none` |
@@ -184,15 +200,84 @@ Untuk pengembangan, pakai `npm run dev` sebagai ganti `build && start`. Worker b
 | `AI_PROVIDER` / `AI_API_KEY` / `AI_MODEL` | `anthropic` (default model `claude-sonnet-5-5`), `openai` (`AI_MODEL` wajib), atau `none` |
 | `ENCRYPTION_KEY` | 32 byte base64 untuk enkripsi token dan tanda tangan sesi/URL |
 
-## Mode cloud
+## Online di Vercel + TiDB Cloud
 
-1. **Database**: buat cluster TiDB Cloud (region Singapore), lalu
-   `DATABASE_URL=mysql://<user>:<pass>@gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/report_tool` dan `DATABASE_SSL=true`.
-   Jalankan `npm run db:migrate` sekali dari komputermu dengan `.env` yang sama.
-2. **Storage**: bucket Cloudflare R2 privat, `STORAGE_DRIVER=s3`. Gambar dibaca lewat presigned URL.
-3. **Queue**: Upstash QStash, `QUEUE_DRIVER=qstash`. QStash memanggil `https://<domain>/api/jobs/:type` dan mengulang job yang gagal (maks. 3 percobaan).
-4. **Worker**: deploy folder `worker/` (ada `Dockerfile`) ke Railway/Render/Fly dengan `WORKER_TOKEN=<acak>` dan `BLOCK_PRIVATE_NETWORKS=true`. Isi `BROWSER_DRIVER=remote-worker`, `BROWSER_WORKER_URL`, `BROWSER_WORKER_TOKEN` di Vercel.
-5. **Vercel**: import repo, isi semua variabel, `APP_MODE=cloud`, `APP_URL=https://<domain>`, dan daftarkan `https://<domain>/api/connectors/basecamp/callback` di Launchpad. Paket Pro diperlukan untuk pemakaian kerja/komersial.
+Contoh di bawah memakai domain `daily-report.lumelo.my.id` dan cluster TiDB yang sudah ada. Database lain di cluster yang sama tidak disentuh: aplikasi hanya membuat dan mengubah tabel di database miliknya sendiri, dan migrasi tidak pernah menjalankan `DROP`.
+
+### 1. Database di TiDB (sekali saja)
+
+Di DBeaver, buka koneksi TiDB sebagai user `root` cluster, lalu jalankan:
+
+```sql
+CREATE DATABASE IF NOT EXISTS daily_report;
+
+-- <prefix> = bagian sebelum ".root" pada username root-mu, mis. 4AbCdEfGh
+CREATE USER '<prefix>.daily_report'@'%' IDENTIFIED BY '<password-panjang-acak>';
+GRANT ALL PRIVILEGES ON daily_report.* TO '<prefix>.daily_report'@'%';
+```
+
+User ini hanya punya akses ke `daily_report`, jadi aplikasi tidak bisa membaca atau mengubah database lain di cluster. Tabel dibuat otomatis saat deploy (lihat langkah 3).
+
+`DATABASE_URL` untuk aplikasi (host sesuai dialog *Connect* di TiDB Cloud; karakter khusus di password harus di-URL-encode):
+
+```
+mysql://<prefix>.daily_report:<password>@gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000/daily_report
+```
+
+TLS aktif otomatis untuk host `tidbcloud.com`.
+
+### 2. Project Vercel
+
+1. *Add New → Project*, import repo `Zee7X/daily-report`. Framework terdeteksi sebagai Next.js.
+2. *Storage → Create → Blob*, pilih akses **Private**, lalu hubungkan ke project. Gambar laporan disimpan di sini dan hanya bisa dibuka lewat aplikasi.
+3. *Settings → Environment Variables*:
+
+| Variabel | Nilai |
+| --- | --- |
+| `APP_URL` | `https://daily-report.lumelo.my.id` |
+| `AUTH_URL` | domain `.vercel.app` project-mu, mis. `https://daily-report.vercel.app` |
+| `DATABASE_URL` | dari langkah 1 |
+| `ENCRYPTION_KEY` | hasil `npm run gen:key` (simpan baik-baik) |
+| `SIGNUP_ALLOWED_EMAILS` | email yang boleh mendaftar, mis. `rizick076@gmail.com,@kantor.com`; kosong = hanya akun pertama |
+| `BASECAMP_CLIENT_ID`, `BASECAMP_CLIENT_SECRET` | dari Launchpad |
+| `BASECAMP_USER_AGENT` | `Daily Report (email-kamu@example.com)` |
+| `AI_PROVIDER`, `AI_API_KEY` | opsional |
+
+Di Vercel, nilai default berikut sudah otomatis: `APP_MODE=cloud`, `STORAGE_DRIVER=vercel-blob`, `QUEUE_DRIVER=local` (job berjalan di fungsi yang sama lewat `after()`), `BROWSER_DRIVER=none`.
+
+### 3. Deploy
+
+Script `vercel-build` menjalankan migrasi database lalu `next build`, jadi setiap deploy otomatis membuat atau memperbarui tabel di `daily_report`.
+
+### 4. Domain
+
+*Settings → Domains → Add* `daily-report.lumelo.my.id`, lalu buat record DNS `CNAME daily-report` ke nilai yang ditampilkan Vercel. Tunggu sampai status domain *Valid Configuration* dan sertifikat HTTPS terbit sebelum membukanya.
+
+### 5. Basecamp
+
+Di integrasi Launchpad, isi Redirect URI dengan domain login (bukan domain lumelo):
+
+```
+https://daily-report.vercel.app/api/connectors/basecamp/callback
+```
+
+### Login di domain Vercel, aplikasi di domain sendiri
+
+Bila `AUTH_URL` diisi:
+
+- `/login` di `daily-report.lumelo.my.id` dialihkan ke `AUTH_URL`. Form email/password, "Login with Basecamp", dan callback OAuth hanya berjalan di sana.
+- Setelah login berhasil, sesi diserahkan ke `APP_URL` lewat token sekali pakai yang berlaku 60 detik, hanya sah untuk domain tujuan, dan hanya hash-nya yang disimpan.
+- "Connect Basecamp" dari domain lumelo juga mampir ke `AUTH_URL` dengan cara yang sama, lalu kembali ke halaman Koneksi.
+- Sesi di domain login hanya berlaku 15 menit. Logout menghapus sesi di kedua domain.
+- Halaman aplikasi yang dibuka di domain `.vercel.app` dialihkan ke `APP_URL`.
+
+Peringatan merah di domain baru biasanya salah satu dari dua hal: sertifikat HTTPS belum terbit (tunggu beberapa menit setelah DNS benar), atau Google Safe Browsing menandai domain baru yang punya halaman login sebagai phishing. Memindahkan semua form login ke domain `.vercel.app` mengurangi risiko yang kedua, tapi tidak menjaminnya. Bila tetap muncul, verifikasi domain di Google Search Console lalu minta peninjauan ulang.
+
+### Screenshot dan PDF di cloud
+
+Vercel tidak menjalankan browser, jadi di cloud screenshot diupload manual dan PDF dibuat lewat *Tampilan cetak → Save as PDF*. Untuk screenshot otomatis, deploy folder `worker/` (ada `Dockerfile`) ke Railway/Render/Fly dengan `WORKER_TOKEN` dan `BLOCK_PRIVATE_NETWORKS=true`, lalu isi `BROWSER_DRIVER=remote-worker`, `BROWSER_WORKER_URL`, dan `BROWSER_WORKER_TOKEN` di Vercel.
+
+Alternatif storage dan antrean untuk instalasi lain: Cloudflare R2 (`STORAGE_DRIVER=s3`) dan Upstash QStash (`QUEUE_DRIVER=qstash`).
 
 ## Arsitektur
 
@@ -231,7 +316,9 @@ Implementasikan antarmuka `Connector` di `src/lib/connectors/types.ts` (OAuth, `
 ## Keamanan
 
 - Token OAuth dienkripsi AES-256-GCM. Client Secret hanya dipakai di server.
+- Password disimpan sebagai hash scrypt; percobaan login dibatasi 10 kali per 15 menit per email.
 - Cookie sesi dan state OAuth ditandatangani HMAC, `HttpOnly`, `SameSite=Lax`, dan `Secure` di mode cloud.
+- Serah-terima sesi antar domain memakai token acak sekali pakai (60 detik, terikat domain tujuan); parameter `next` hanya menerima path di aplikasi ini.
 - Request yang mengubah data dari Origin lain ditolak.
 - Gambar privat, hanya bisa dibuka lewat URL bertanda tangan yang kedaluwarsa dalam 1 jam.
 - Jenis file upload dicek dari isinya (magic bytes), bukan dari nama file.

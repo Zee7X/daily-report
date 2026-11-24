@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { assertSafeKey, storage, verifyLocalFileSignature } from '@/lib/storage'
 
-// GET /api/files/<key>?e=<expiry>&s=<signature> — file privat dari storage lokal lewat signed URL.
+// GET /api/files/<key>?e=<expiry>&s=<signature> — file privat (storage lokal atau Vercel Blob) lewat signed URL.
 export async function GET(req: NextRequest, ctx: { params: Promise<{ key: string[] }> }) {
   const { key: parts } = await ctx.params
   const key = parts.join('/')

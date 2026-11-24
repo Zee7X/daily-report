@@ -1,5 +1,5 @@
 import 'server-only'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { env } from './env'
 import { sign, verify } from './crypto'
@@ -7,9 +7,12 @@ import { ensureLocalUser, getUser, type User } from './repo/users'
 
 const COOKIE = 'rt_session'
 const MAX_AGE = 60 * 60 * 24 * 30 // 30 hari
+const AUTH_HOST_MAX_AGE = 60 * 15 // di domain login, sesi hanya untuk menyelesaikan OAuth
 
-export async function createSession(userId: string) {
-  const exp = Math.floor(Date.now() / 1000) + MAX_AGE
+/** `short` dipakai di AUTH_URL: sesi di sana cukup untuk alur login/OAuth, lalu kedaluwarsa sendiri. */
+export async function createSession(userId: string, opts: { short?: boolean } = {}) {
+  const maxAge = opts.short ? AUTH_HOST_MAX_AGE : MAX_AGE
+  const exp = Math.floor(Date.now() / 1000) + maxAge
   const value = `${userId}.${exp}`
   const jar = await cookies()
   jar.set(COOKIE, `${value}.${sign(value, 'session')}`, {
@@ -17,7 +20,7 @@ export async function createSession(userId: string) {
     secure: env.isCloud,
     sameSite: 'lax',
     path: '/',
-    maxAge: MAX_AGE,
+    maxAge,
   })
 }
 
@@ -47,6 +50,9 @@ export async function currentUser(): Promise<User | null> {
 /** Untuk halaman: arahkan ke /login bila belum masuk. */
 export async function requireUser(): Promise<User> {
   const user = await currentUser()
-  if (!user) redirect('/login')
+  if (!user) {
+    const path = (await headers()).get('x-rt-path') ?? '/'
+    redirect(path === '/' || !path.startsWith('/') ? '/login' : `/login?next=${encodeURIComponent(path)}`)
+  }
   return user
 }
